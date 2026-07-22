@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Lato', sans-serif;
+    @apply bg-gray-50 text-gray-800;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Montserrat', sans-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-orange text-white font-montserrat font-bold px-4 py-2 rounded-lg hover:bg-orange/90 transition-all duration-150 flex items-center gap-2 text-sm;
+  }
+  .btn-navy {
+    @apply bg-navy text-white font-montserrat font-bold px-4 py-2 rounded-lg hover:bg-navy/90 transition-all duration-150 flex items-center gap-2 text-sm;
+  }
+  .btn-teal {
+    @apply bg-teal text-white font-montserrat font-bold px-4 py-2 rounded-lg hover:bg-teal/90 transition-all duration-150 flex items-center gap-2 text-sm;
+  }
+  .btn-outline {
+@apply border border-gray-300 text-gray-700 font-montserrat font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-all duration-150 flex items-center gap-2 text-sm;  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100;
+  }
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-100 flex items-center justify-between;
+  }
+  .card-body {
+    @apply p-6;
+  }
+  .form-label {
+    @apply block text-xs font-montserrat font-semibold text-gray-500 uppercase tracking-wide mb-1.5;
+  }
+  .form-input {
+    @apply w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange focus:ring-2 focus:ring-orange/10 transition-all;
+  }
+  .form-select {
+    @apply w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange focus:ring-2 focus:ring-orange/10 transition-all bg-white;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-montserrat font-bold;
+  }
+  .badge-navy { @apply bg-navy/10 text-navy; }
+  .badge-orange { @apply bg-orange/10 text-orange; }
+  .badge-teal { @apply bg-teal/10 text-teal; }
+  .badge-green { @apply bg-green-100 text-green-800; }
+  .badge-red { @apply bg-red/10 text-red; }
+  .badge-gray { @apply bg-gray-100 text-gray-600; }
+  .table-wrap { @apply overflow-x-auto; }
+  table { @apply w-full; }
+  thead tr { @apply border-b border-gray-100; }
+  th { @apply px-4 py-3 text-left text-xs font-montserrat font-semibold text-gray-500 uppercase tracking-wide; }
+  td { @apply px-4 py-3 text-sm border-b border-gray-50; }
+  tbody tr:hover { @apply bg-gray-50/50; }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 transition-all duration-150 font-lato;
+  }
+  .sidebar-link.active {
+    @apply bg-orange/20 text-orange border-l-2 border-orange;
+  }
+  .page-header {
+    @apply flex items-center justify-between mb-6 flex-wrap gap-3;
+  }
+  .page-title {
+    @apply text-2xl font-montserrat font-bold text-navy;
+  }
+  .page-subtitle {
+    @apply text-sm text-gray-500 mt-0.5;
+  }
+  .stat-card {
+    @apply card p-5 flex items-center gap-4;
+  }
+  .stat-icon {
+    @apply w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0;
+  }
+  .stat-number {
+    @apply text-2xl font-montserrat font-bold text-navy;
+  }
+  .stat-label {
+    @apply text-xs font-montserrat font-semibold text-gray-500 uppercase tracking-wide;
+  }
+  .member-photo-card {
+    @apply text-center p-3 border-2 border-transparent rounded-xl cursor-pointer hover:border-teal hover:bg-teal/5 transition-all duration-150;
+  }
+  .member-photo-card.selected {
+    @apply border-teal bg-teal/5;
+  }
+  .alert-info {
+    @apply bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 text-sm text-blue-800;
+  }
+  .alert-success {
+    @apply bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 text-sm text-green-800;
+  }
+  .alert-warning {
+    @apply bg-orange/5 border border-orange/20 rounded-lg p-4 flex items-start gap-3 text-sm text-orange;
+  }
+}
