@@ -4,12 +4,15 @@ const nodemailer = require('nodemailer')
 // Uses Brevo (formerly Sendinblue) SMTP relay — works on Render, free 300/day
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false, // STARTTLS
+  port: 465,
+  secure: true, // SSL — required on Render (port 587/STARTTLS is blocked)
   auth: {
     user: process.env.BREVO_SMTP_USER, // e.g. 7xxxxx@smtp-brevo.com
     pass: process.env.BREVO_SMTP_PASS, // Brevo SMTP key
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 })
 
 const FROM_NAME  = process.env.MAIL_FROM_NAME  || 'MUTCU DMS'
