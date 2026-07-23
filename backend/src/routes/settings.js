@@ -5,7 +5,6 @@ const { authenticate, requireRole } = require('../middleware/auth');
 
 const ADMIN = ['super_admin', 'ec_admin'];
 
-// Default settings fallback (used when table doesn't exist yet)
 const DEFAULT_SETTINGS = {
   app_name:                   process.env.APP_NAME || 'MUTCU DMS',
   org_name:                   "Murang'a University of Technology Christian Union",
@@ -24,18 +23,18 @@ const DEFAULT_SETTINGS = {
   allow_self_registration:    'true',
   require_email_verification: 'true',
   default_membership_type:    'full',
-}
+};
 
-// GET /api/settings — get all settings (admin)
+// GET /api/settings
 router.get('/', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
     const { data, error } = await supabase.from('system_settings').select('*').order('category').order('key');
     if (error) {
-      console.warn('[SETTINGS] Table not found, returning defaults. Run schema_v3.sql in Supabase.')
+      console.warn('[SETTINGS] Table not found, returning defaults:', error.message);
       return res.json({ settings: DEFAULT_SETTINGS, grouped: {}, raw: [], usingDefaults: true });
     }
     const grouped = {};
-    const flat = { ...DEFAULT_SETTINGS };
+    const flat = Object.assign({}, DEFAULT_SETTINGS);
     for (const s of data || []) {
       flat[s.key] = s.value;
       if (!grouped[s.category]) grouped[s.category] = [];
@@ -43,105 +42,116 @@ router.get('/', authenticate, requireRole(...ADMIN), async (req, res) => {
     }
     res.json({ settings: flat, grouped, raw: data || [] });
   } catch (err) {
+    console.error('[SETTINGS GET ERROR]', err.message);
     res.json({ settings: DEFAULT_SETTINGS, grouped: {}, raw: [], usingDefaults: true });
   }
 });
 
-// GET /api/settings/public — public settings (no auth)
+// GET /api/settings/public
 router.get('/public', async (req, res) => {
   try {
     const publicKeys = ['app_name', 'org_name', 'org_short_name', 'org_motto', 'founding_year', 'portal_url'];
     const settings = {};
-    publicKeys.forEach(k => { if (DEFAULT_SETTINGS[k]) settings[k] = DEFAULT_SETTINGS[k]; });
+    publicKeys.forEach(function(k) { if (DEFAULT_SETTINGS[k]) settings[k] = DEFAULT_SETTINGS[k]; });
     const { data, error } = await supabase.from('system_settings').select('key,value').in('key', publicKeys);
-    if (!error) for (const s of data || []) settings[s.key] = s.value;
-    res.json({ settings });
+    if (!error) {
+      for (const s of data || []) settings[s.key] = s.value;
+    }
+    res.json({ settings: settings });
   } catch (err) {
     const settings = {};
-    ['app_name','org_name','org_short_name','org_motto','founding_year','portal_url']
-      .forEach(k => { settings[k] = DEFAULT_SETTINGS[k]; });
-    res.json({ settings });
+    ['app_name','org_name','org_short_name','org_motto','founding_year','portal_url'].forEach(function(k) {
+      settings[k] = DEFAULT_SETTINGS[k];
+    });
+    res.json({ settings: settings });
   }
 });
 
-
-
+// PUT /api/settings (bulk update)
+router.put('/', authenticate, requireRole(...ADMIN), async (req, res) => {
+  try {
+    const body = req.body;
+    const settings = body.settings;
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'settings object required' });
+    }
+    const tableCheck = await supabase.from('system_settings').select('key').limit(1);
+    if (tableCheck.error) {
+      return res.status(503).json({
+        error: 'Settings table not initialized. Run schema_v3.sql in Supabase SQL Editor first.',
+        detail: tableCheck.error.message,
+      });
+    }
     const updates = [];
     const errors = [];
-
-    for (const [key, value] of Object.entries(settings)) {
-      // Try update first (row should exist from seed data)
-      const { error: updateError } = await supabase.from('system_settings')
-        .update({
-          value: String(value),
-          updated_by: req.user.id,
-          updated_at: new Date().toISOString(),
-        })
+    const keys = Object.keys(settings);
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const value = String(settings[key]);
+      const updateResult = await supabase.from('system_settings')
+        .update({ value: value, updated_by: req.user.id, updated_at: new Date().toISOString() })
         .eq('key', key);
-
-      if (updateError) {
-        // Row doesn't exist — insert it
-        const { error: insertError } = await supabase.from('system_settings').insert({
-          key,
-          value: String(value),
-          label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      if (updateResult.error) {
+        const insertResult = await supabase.from('system_settings').insert({
+          key: key,
+          value: value,
+          label: key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }),
           category: 'general',
           updated_by: req.user.id,
           updated_at: new Date().toISOString(),
         });
-        if (insertError) errors.push(`${key}: ${insertError.message}`);
-        else updates.push(key);
+        if (insertResult.error) {
+          errors.push(key + ': ' + insertResult.error.message);
+        } else {
+          updates.push(key);
+        }
       } else {
         updates.push(key);
       }
     }
-
-    // Audit log
     if (updates.length > 0) {
       await supabase.from('audit_logs').insert({
         actor_id: req.user.id,
         action: 'settings.update',
-        description: `Updated settings: ${updates.join(', ')}`,
-      }).catch(() => {});
+        description: 'Updated settings: ' + updates.join(', '),
+      }).catch(function() {});
     }
-
     res.json({
-      message: `${updates.length} settings updated`,
+      message: updates.length + ' settings updated',
       updated: updates,
       errors: errors.length > 0 ? errors : undefined,
     });
-  
+  } catch (err) {
+    console.error('[SETTINGS PUT ERROR]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/settings/:key (single update)
 router.put('/:key', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
-    const { value } = req.body;
     const key = req.params.key;
-
-    // Try update first
-    const { data: updated, error: updateError } = await supabase.from('system_settings')
-      .update({
-        value: String(value),
-        updated_by: req.user.id,
-        updated_at: new Date().toISOString(),
-      })
+    const value = String(req.body.value);
+    const updateResult = await supabase.from('system_settings')
+      .update({ value: value, updated_by: req.user.id, updated_at: new Date().toISOString() })
       .eq('key', key)
-      .select().single();
-
-    if (updateError) {
-      // Insert if not found
-      const { data: inserted, error: insertError } = await supabase.from('system_settings').insert({
-        key,
-        value: String(value),
-        label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      .select()
+      .single();
+    if (updateResult.error) {
+      const insertResult = await supabase.from('system_settings').insert({
+        key: key,
+        value: value,
+        label: key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }),
         category: 'general',
         updated_by: req.user.id,
         updated_at: new Date().toISOString(),
       }).select().single();
-      if (insertError) throw insertError;
-      return res.json({ setting: inserted });
+      if (insertResult.error) throw insertResult.error;
+      return res.json({ setting: insertResult.data });
     }
-
-    res.json({ setting: updated });
+    res.json({ setting: updateResult.data });
   } catch (err) {
+    console.error('[SETTINGS PUT KEY ERROR]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
