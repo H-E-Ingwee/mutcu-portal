@@ -5,19 +5,6 @@ import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
 
-function MutcuLogo({ size = 'md' }) {
-  const sizes = { sm: 'w-10 h-10', md: 'w-16 h-16', lg: 'w-20 h-20' }
-  return (
-    <div className={`${sizes[size]} bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden p-1.5 border border-gray-100`}>
-      <img
-        src="/mutcu-icon.png"
-        alt="MUTCU"
-        className="w-full h-full object-contain"
-      />
-    </div>
-  )
-}
-
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPass, setShowPass] = useState(false)
@@ -36,11 +23,17 @@ export default function Login() {
       localStorage.setItem('mutcu_user', JSON.stringify(data.user))
       login(data.token, data.user)
       toast.success(`Welcome, ${data.user.name.split(' ')[0]}!`)
-      let destination = '/dashboard'
-      if (data.user.must_change_password) destination = '/change-password'
-      else if (!data.user.email_verified) destination = '/verify-email'
-      else if (!data.user.profile_complete) destination = '/profile/complete'
-      navigate(destination, { replace: true })
+
+      // Enforce verification before dashboard
+      if (data.user.must_change_password) {
+        navigate('/change-password', { replace: true })
+      } else if (!data.user.email_verified) {
+        navigate('/verify-email', { replace: true })
+      } else if (!data.user.profile_complete) {
+        navigate('/profile/complete', { replace: true })
+      } else {
+        navigate('/dashboard', { replace: true })
+      }
     } catch (err) {
       const msg = err.response?.data?.error || 'Login failed. Please check your credentials.'
       setError(msg)
@@ -51,25 +44,18 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-navy flex-col items-center justify-center p-12 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5"
           style={{backgroundImage:'radial-gradient(circle at 20% 50%, #FF9700 0%, transparent 50%), radial-gradient(circle at 80% 20%, #30D5C8 0%, transparent 50%)'}} />
         <div className="relative z-10 text-center">
-          <div className="flex justify-center mb-6">
-            <MutcuLogo size="lg" />
+          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl overflow-hidden p-1.5">
+            <img src="/mutcu-icon.png" alt="MUTCU" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-4xl font-montserrat font-bold text-white mb-1">MUTCU DMS</h1>
-          <p className="text-white/60 text-sm mb-2">Murang'a University of Technology</p>
-          <p className="text-white/40 text-xs mb-8 italic">Christian Union</p>
-          <div className="space-y-4 text-left max-w-xs">
-            {[
-              'Digital membership enrollment & MUTCU numbers',
-              'Constitutional e-nomination system',
-              'Photo-enabled member directory',
-              'AI-assisted NC vetting dashboard',
-              'Real-time analytics & reports',
-            ].map((f, i) => (
+          <p className="text-white/60 text-sm mb-1">Murang'a University of Technology</p>
+          <p className="text-white/40 text-xs mb-8 italic">Christian Union · Digital Management System</p>
+          <div className="space-y-3 text-left max-w-xs">
+            {['Digital membership & MUTCU numbers','Constitutional e-nomination system','Photo-enabled member directory','NC vetting dashboard','Real-time analytics'].map((f,i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-orange/20 flex items-center justify-center flex-shrink-0">
                   <div className="w-2 h-2 rounded-full bg-orange" />
@@ -82,14 +68,11 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right panel */}
       <div className="flex-1 flex items-center justify-center p-6 bg-gray-50">
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-8">
-            <div className="flex justify-center mb-3">
-              <div className="w-16 h-16 bg-navy rounded-2xl flex items-center justify-center overflow-hidden p-1.5">
-                <img src="/mutcu-icon.png" alt="MUTCU" className="w-full h-full object-contain" />
-              </div>
+            <div className="w-16 h-16 bg-navy rounded-2xl flex items-center justify-center mx-auto mb-3 overflow-hidden p-1.5">
+              <img src="/mutcu-icon.png" alt="MUTCU" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-2xl font-montserrat font-bold text-navy">MUTCU DMS</h1>
             <p className="text-gray-400 text-xs mt-1 italic">Inspire Love, Hope & Godliness</p>
@@ -115,7 +98,7 @@ export default function Login() {
               <div>
                 <label className="form-label">Password</label>
                 <div className="relative">
-                  <input type={showPass ? 'text' : 'password'} className="form-input pr-10"
+                  <input type={showPass?'text':'password'} className="form-input pr-10"
                     placeholder="Your password" value={form.password}
                     onChange={e => setForm({...form, password: e.target.value})} required />
                   <button type="button" onClick={() => setShowPass(!showPass)}
