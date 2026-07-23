@@ -30,6 +30,4 @@ Run `backend/src/db/schema.sql` in Supabase SQL Editor.
 ### 4. Domain
 Point `portal.mutcu.org` to Vercel in Hostinger DNS settings.
 
-## Login
-- Email: admin@mutcu.org
-- Password: MutcuAdmin@2026!
+
