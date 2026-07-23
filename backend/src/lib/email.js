@@ -1,19 +1,6 @@
-const nodemailer = require('nodemailer')
-
-// ─── Transporter ────────────────────────────────────────────────────────────
-// Uses Brevo (formerly Sendinblue) SMTP relay — works on Render, free 300/day
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 465,
-  secure: true, // SSL — required on Render (port 587/STARTTLS is blocked)
-  auth: {
-    user: process.env.BREVO_SMTP_USER, // e.g. 7xxxxx@smtp-brevo.com
-    pass: process.env.BREVO_SMTP_PASS, // Brevo SMTP key
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-})
+// ─── Brevo HTTP API (no SMTP — works on Render free tier) ───────────────────
+// Render blocks all outbound SMTP ports (587, 465). Use Brevo REST API instead.
+const BREVO_API_KEY = process.env.BREVO_API_KEY
 
 const FROM_NAME  = process.env.MAIL_FROM_NAME  || 'MUTCU DMS'
 const FROM_EMAIL = process.env.MAIL_FROM_EMAIL || 'noreply@mutcu.org'
@@ -67,28 +54,7 @@ function htmlWrap(title, bodyHtml, footerNote = '') {
 </html>`
 }
 
-// ─── Generic send helper ─────────────────────────────────────────────────────
-async function sendEmail({ to, subject, html, replyTo }) {
-  if (!process.env.BREVO_SMTP_USER || !process.env.BREVO_SMTP_PASS) {
-    console.warn(`[EMAIL SKIPPED — no SMTP config] To: ${to} | Subject: ${subject}`)
-    return { messageId: 'skipped-no-config' }
-  }
 
-  try {
-    const info = await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      replyTo: replyTo || REPLY_TO,
-      to,
-      subject,
-      html,
-    })
-    console.log(`[EMAIL SENT] To: ${to} | Subject: ${subject} | ID: ${info.messageId}`)
-    return info
-  } catch (err) {
-    console.error(`[EMAIL ERROR] To: ${to} | Subject: ${subject} | Error: ${err.message}`)
-    throw err
-  }
-}
 
 // ─── 1. Welcome / Verification email (secretary-enrolled member) ─────────────
 async function sendVerificationEmail(user, token) {
@@ -349,21 +315,7 @@ async function sendCycleAnnouncementEmail({ recipientEmails, cycleTitle, spiritu
   }
 }
 
-// ─── Verify SMTP connection on startup ──────────────────────────────────────
-async function verifyConnection() {
-  if (!process.env.BREVO_SMTP_USER || !process.env.BREVO_SMTP_PASS) {
-    console.warn('[EMAIL] BREVO_SMTP_USER / BREVO_SMTP_PASS not set — email sending disabled')
-    return false
-  }
-  try {
-    await transporter.verify()
-    console.log('[EMAIL] ✅ Brevo SMTP connection verified — email is ready')
-    return true
-  } catch (err) {
-    console.error('[EMAIL] ❌ SMTP connection failed:', err.message)
-    return false
-  }
-}
+
 
 module.exports = {
   sendEmail,
