@@ -79,6 +79,7 @@ export default function AdminDashboard() {
               { label: 'Analytics', sub: 'Data insights', to: '/analytics', icon: BarChart3 },
               { label: 'Role Management', sub: 'Assign roles', to: '/admin/roles', icon: Shield },
               { label: 'Audit Log', sub: 'System activity', to: '/admin/audit-log', icon: ClipboardList },
+              { label: 'System Settings', sub: 'Configure portal', to: '/admin/settings', icon: Settings },
             ].map((link, i) => (
               <Link key={i} to={link.to} className="flex items-center justify-between px-5 py-3 border-b border-gray-50 hover:bg-gray-50 transition-all last:border-0">
                 <div className="flex items-center gap-3">

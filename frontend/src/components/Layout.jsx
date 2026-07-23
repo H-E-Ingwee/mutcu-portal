@@ -5,7 +5,7 @@ import api from '../lib/api'
 import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
-  MessageSquare, ClipboardList, Megaphone, History, Send, X
+  MessageSquare, ClipboardList, Megaphone, History, Send, X, CalendarDays
 } from 'lucide-react'
 
 export default function Layout() {
@@ -93,6 +93,7 @@ export default function Layout() {
           <NavItem to="/nominations/nominees" icon={Award} label="Nominees" />
           <NavItem to="/member-card" icon={UserCircle} label="Member Card" />
           <NavItem to="/leadership" icon={History} label="Leadership History" />
+          <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
           <NavItem to="/contact" icon={Send} label="Contact Admin" />
 
           {isNC && isNC() && (
@@ -122,6 +123,7 @@ export default function Layout() {
               <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
               <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
               <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
+              <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
             </>
           )}
         </nav>

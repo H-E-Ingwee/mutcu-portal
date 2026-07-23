@@ -6,7 +6,7 @@ const router = express.Router()
 const supabase = require('../lib/supabase')
 const { signToken } = require('../lib/jwt')
 const { authenticate } = require('../middleware/auth')
-const { sendPasswordResetEmail, sendVerificationEmail } = require('../lib/email')
+const { sendPasswordResetEmail, sendVerificationEmail, sendCycleAnnouncementEmail } = require('../lib/email')
 
 function calcGraduationYear(studentId) {
   if (!studentId) return null
@@ -111,6 +111,22 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', authenticate, async (req, res) => {
   res.json({ user: sanitizeUser(req.user) })
+})
+
+// POST /api/auth/login-unverified — get token for unverified user (resend verification only)
+router.post('/login-unverified', async (req, res) => {
+  try {
+    const { email } = req.body
+    if (!email) return res.status(400).json({ error: 'Email required' })
+    const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (user.email_verified) return res.status(400).json({ error: 'Email already verified' })
+    // Issue short-lived token (1 hour) for resend only
+    const token = signToken({ id: user.id, role: user.role })
+    res.json({ token })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // POST /api/auth/verify-email

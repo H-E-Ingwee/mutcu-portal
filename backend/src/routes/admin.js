@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const supabase = require('../lib/supabase')
 const { authenticate, requireRole } = require('../middleware/auth')
+const { sendCycleAnnouncementEmail } = require('../lib/email')
 
 const ADMIN = ['super_admin','ec_admin']
 
@@ -36,11 +37,7 @@ router.post('/cycles/:id/advance-status', authenticate, requireRole(...ADMIN), a
       return res.status(400).json({ error: 'Cannot advance from current status' })
     }
     const nextStatus = CYCLE_STATUSES[currentIdx + 1]
-    const { data, error } = await supabase.from('nomination_cycles').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
-    if (error) throw error
-    res.json({ cycle: data, message: `Cycle advanced to: ${nextStatus.replace(/_/g,' ')}` })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
+    
 
 // POST /api/admin/cycles/:id/set-status — set specific status
 router.post('/cycles/:id/set-status', authenticate, requireRole(...ADMIN), async (req, res) => {

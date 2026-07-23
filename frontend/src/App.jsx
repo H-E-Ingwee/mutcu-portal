@@ -19,6 +19,7 @@ import Announcements from './pages/Announcements'
 import Contact from './pages/Contact'
 import Leadership from './pages/Leadership'
 import Analytics from './pages/Analytics'
+import CalendarPage from './pages/Calendar'
 
 import Nominations from './pages/nominations/Nominations'
 import Nominees from './pages/nominations/Nominees'
@@ -42,6 +43,7 @@ import AdminRoles from './pages/admin/AdminRoles'
 import AdminAuditLog from './pages/admin/AdminAuditLog'
 import AdminPositions from './pages/admin/AdminPositions'
 import AdminMessages from './pages/admin/AdminMessages'
+import AdminSettings from './pages/admin/AdminSettings'
 
 function Spinner() {
   return (
@@ -86,15 +88,15 @@ function AppRoutes() {
       <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
       <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
 
-      {/* Auth flows — accessible without full auth */}
+      {/* Auth flows */}
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/change-password" element={<ChangePassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
 
-      {/* Profile completion — protected but no role restriction */}
+      {/* Profile completion */}
       <Route path="/profile/complete" element={<ProtectedRoute><ProfileComplete /></ProtectedRoute>} />
 
-      {/* Main app — protected layout */}
+      {/* Main app */}
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="profile/edit" element={<ProfileEdit />} />
@@ -102,6 +104,7 @@ function AppRoutes() {
         <Route path="announcements" element={<Announcements />} />
         <Route path="contact" element={<Contact />} />
         <Route path="leadership" element={<Leadership />} />
+        <Route path="calendar" element={<CalendarPage />} />
         <Route path="nominations" element={<Nominations />} />
         <Route path="nominations/nominees" element={<Nominees />} />
 
@@ -111,11 +114,11 @@ function AppRoutes() {
         <Route path="nc/objections" element={<ProtectedRoute roles={['nc_member','ec_admin','super_admin']}><NCObjections /></ProtectedRoute>} />
         <Route path="nc/suggestions" element={<ProtectedRoute roles={['nc_member','ec_admin','super_admin']}><NCSuggestions /></ProtectedRoute>} />
 
-        {/* Secretary */}
-        <Route path="secretary/members" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MembersList /></ProtectedRoute>} />
+        {/* Secretary — includes ministry_secretary */}
+        <Route path="secretary/members" element={<ProtectedRoute roles={['cu_secretary','ministry_secretary','ec_admin','super_admin']}><MembersList /></ProtectedRoute>} />
         <Route path="secretary/members/pending" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MembersPending /></ProtectedRoute>} />
         <Route path="secretary/members/create" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MemberCreate /></ProtectedRoute>} />
-        <Route path="secretary/members/:id/edit" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MemberEdit /></ProtectedRoute>} />
+        <Route path="secretary/members/:id/edit" element={<ProtectedRoute roles={['cu_secretary','ministry_secretary','ec_admin','super_admin']}><MemberEdit /></ProtectedRoute>} />
         <Route path="secretary/members/import" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MembersImport /></ProtectedRoute>} />
 
         {/* Admin */}
@@ -127,6 +130,7 @@ function AppRoutes() {
         <Route path="admin/audit-log" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminAuditLog /></ProtectedRoute>} />
         <Route path="admin/positions" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminPositions /></ProtectedRoute>} />
         <Route path="admin/messages" element={<ProtectedRoute roles={['ec_admin','super_admin','cu_secretary']}><AdminMessages /></ProtectedRoute>} />
+        <Route path="admin/settings" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminSettings /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['ec_admin','super_admin']}><Analytics /></ProtectedRoute>} />
       </Route>
 
