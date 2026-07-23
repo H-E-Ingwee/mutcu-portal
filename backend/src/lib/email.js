@@ -1,12 +1,30 @@
 const nodemailer = require('nodemailer')
+const { google } = require('googleapis')
 
-// Gmail OAuth2 transporter
-function createTransporter() {
+const OAuth2 = google.auth.OAuth2
+
+async function createTransporter() {
+  const oauth2Client = new OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    'https://developers.google.com/oauthplayground'
+  )
+
+  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN })
+
+  const accessToken = await new Promise((resolve, reject) => {
+    oauth2Client.getAccessToken((err, token) => {
+      if (err) reject(err)
+      else resolve(token)
+    })
+  })
+
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
       type: 'OAuth2',
       user: process.env.GMAIL_USER,
+      accessToken,
       clientId: process.env.GMAIL_CLIENT_ID,
       clientSecret: process.env.GMAIL_CLIENT_SECRET,
       refreshToken: process.env.GMAIL_REFRESH_TOKEN,
@@ -14,18 +32,9 @@ function createTransporter() {
   })
 }
 
-const transporter = createTransporter()
-
-transporter.verify((error) => {
-  if (error) {
-    console.error('Gmail OAuth2 error:', error.message)
-  } else {
-    console.log('Gmail OAuth2 ready:', process.env.GMAIL_USER)
-  }
-})
-
 async function sendEmail({ to, subject, html }) {
   try {
+    const transporter = await createTransporter()
     const info = await transporter.sendMail({
       from: `"${process.env.MAIL_FROM_NAME || 'MUTCU DMS'}" <${process.env.GMAIL_USER}>`,
       to, subject, html,
@@ -57,7 +66,7 @@ async function sendVerificationEmail(user, token) {
           <div style="text-align:center;margin:1.5rem 0;">
             <a href="${url}" style="display:inline-block;background:#FF9700;color:#fff;text-decoration:none;padding:0.875rem 2rem;border-radius:8px;font-weight:700;">Verify Email Address</a>
           </div>
-          <p style="font-size:0.75rem;color:#718096;">Or copy this link:<br><a href="${url}" style="color:#04003D;word-break:break-all;">${url}</a></p>
+          <p style="font-size:0.75rem;color:#718096;">Or copy: <a href="${url}" style="color:#04003D;word-break:break-all;">${url}</a></p>
           <p style="font-size:0.75rem;color:#718096;">Link expires in 48 hours.</p>
         </div>
         <div style="background:#F5F7FA;padding:1rem;text-align:center;font-size:0.72rem;color:#718096;">Inspire Love, Hope & Godliness · portal.mutcu.org</div>
@@ -91,7 +100,7 @@ async function sendApprovalEmail(user) {
 async function sendPasswordResetEmail(user, token) {
   const frontendUrl = process.env.FRONTEND_URL || 'https://mutcu-portal.vercel.app'
   const url = `${frontendUrl}/reset-password?token=${token}`
-  console.log('Reset URL:', url)
+  console.log('Sending reset email to:', user.email, 'URL:', url)
   await sendEmail({
     to: user.email,
     subject: 'Reset Your MUTCU DMS Password',
