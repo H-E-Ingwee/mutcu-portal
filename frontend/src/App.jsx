@@ -7,6 +7,7 @@ import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import ChangePassword from './pages/auth/ChangePassword'
+import VerifyEmail from './pages/auth/VerifyEmail'
 
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -76,17 +77,24 @@ function GuestRoute({ children }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public profile — no auth needed */}
       <Route path="/member/:mutcuNumber" element={<PublicProfile />} />
 
+      {/* Guest-only routes */}
       <Route path="/" element={<GuestRoute><Login /></GuestRoute>} />
       <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
       <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
       <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
+
+      {/* Auth flows — accessible without full auth */}
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/verify-email" element={<Navigate to="/dashboard" replace />} />
       <Route path="/change-password" element={<ChangePassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
+
+      {/* Profile completion — protected but no role restriction */}
       <Route path="/profile/complete" element={<ProtectedRoute><ProfileComplete /></ProtectedRoute>} />
 
+      {/* Main app — protected layout */}
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="profile/edit" element={<ProfileEdit />} />
@@ -97,17 +105,20 @@ function AppRoutes() {
         <Route path="nominations" element={<Nominations />} />
         <Route path="nominations/nominees" element={<Nominees />} />
 
+        {/* Nomination College */}
         <Route path="nc" element={<ProtectedRoute roles={['nc_member','ec_admin','super_admin']}><NCDashboard /></ProtectedRoute>} />
         <Route path="nc/position/:positionId" element={<ProtectedRoute roles={['nc_member','ec_admin','super_admin']}><NCPosition /></ProtectedRoute>} />
         <Route path="nc/objections" element={<ProtectedRoute roles={['nc_member','ec_admin','super_admin']}><NCObjections /></ProtectedRoute>} />
         <Route path="nc/suggestions" element={<ProtectedRoute roles={['nc_member','ec_admin','super_admin']}><NCSuggestions /></ProtectedRoute>} />
 
+        {/* Secretary */}
         <Route path="secretary/members" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MembersList /></ProtectedRoute>} />
         <Route path="secretary/members/pending" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MembersPending /></ProtectedRoute>} />
         <Route path="secretary/members/create" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MemberCreate /></ProtectedRoute>} />
         <Route path="secretary/members/:id/edit" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MemberEdit /></ProtectedRoute>} />
         <Route path="secretary/members/import" element={<ProtectedRoute roles={['cu_secretary','ec_admin','super_admin']}><MembersImport /></ProtectedRoute>} />
 
+        {/* Admin */}
         <Route path="admin" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/cycles" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminCycles /></ProtectedRoute>} />
         <Route path="admin/cycles/create" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminCycleCreate /></ProtectedRoute>} />
@@ -119,6 +130,7 @@ function AppRoutes() {
         <Route path="analytics" element={<ProtectedRoute roles={['ec_admin','super_admin']}><Analytics /></ProtectedRoute>} />
       </Route>
 
+      {/* Catch-all */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

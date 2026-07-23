@@ -90,38 +90,72 @@ async function sendEmail({ to, subject, html, replyTo }) {
   }
 }
 
-// ─── 1. Welcome / Verification email (secretary-enrolled member) ─────────────
+// ─── 1a. Email verification (self-registered member) ─────────────────────────
+// ─── 1b. Welcome email (secretary-enrolled member with temp password) ─────────
 async function sendVerificationEmail(user, token) {
+  // Secretary-enrolled: has temp_password → send welcome + credentials
+  if (user.temp_password) {
+    const html = htmlWrap(
+      'Welcome to MUTCU DMS',
+      `
+      <h2 style="margin:0 0 8px;font-size:20px;color:#04003D;font-weight:800;">Welcome, ${user.name}! 🎉</h2>
+      <p style="margin:0 0 20px;font-size:14px;color:#4A5568;line-height:1.6;">
+        You have been enrolled as a member of the <strong>Murang'a University of Technology Christian Union</strong>.
+        Your account is ready &mdash; use the temporary password below to sign in.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F0F4FF;border-radius:8px;margin-bottom:24px;">
+        <tr><td style="padding:16px 20px;">
+          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:1px;">Your Login Details</p>
+          <p style="margin:0 0 4px;font-size:13px;color:#04003D;"><strong>Email:</strong> ${user.email}</p>
+          <p style="margin:0 0 4px;font-size:13px;color:#04003D;"><strong>Temporary Password:</strong>
+            <code style="background:#fff;padding:2px 8px;border-radius:4px;font-size:13px;border:1px solid #E2E8F0;">${user.temp_password}</code>
+          </p>
+          ${user.mutcu_number ? `<p style="margin:4px 0 0;font-size:13px;color:#04003D;"><strong>MUTCU Number:</strong> <span style="color:#FF9700;font-weight:700;">${user.mutcu_number}</span></p>` : ''}
+        </td></tr>
+      </table>
+      <p style="margin:0 0 20px;font-size:13px;color:#4A5568;line-height:1.6;">
+        You will be prompted to change your password on first login. Please keep your credentials safe.
+      </p>
+      <div style="text-align:center;margin-bottom:8px;">
+        <a href="${FRONTEND}/login" style="display:inline-block;background:#FF9700;color:#ffffff;font-weight:700;font-size:14px;padding:12px 32px;border-radius:8px;text-decoration:none;">
+          Sign In to MUTCU DMS &rarr;
+        </a>
+      </div>
+      `,
+      'This email was sent because you were enrolled by the CU Secretary. If this was a mistake, please contact admin.'
+    )
+    return sendEmail({ to: user.email, subject: 'Welcome to MUTCU DMS — Your Account is Ready', html })
+  }
+
+  // Self-registered: send email verification link
+  const verifyUrl = `${FRONTEND}/verify-email?token=${token}&id=${user.id}`
   const html = htmlWrap(
-    'Welcome to MUTCU DMS',
+    'Verify Your Email',
     `
-    <h2 style="margin:0 0 8px;font-size:20px;color:#04003D;font-weight:800;">Welcome, ${user.name}! 🎉</h2>
+    <h2 style="margin:0 0 8px;font-size:20px;color:#04003D;font-weight:800;">Verify Your Email Address ✉️</h2>
     <p style="margin:0 0 20px;font-size:14px;color:#4A5568;line-height:1.6;">
-      You have been enrolled as a member of the <strong>Murang'a University of Technology Christian Union</strong>.
-      Your account is ready &mdash; use the temporary password below to sign in.
+      Hi <strong>${user.name}</strong>, welcome to MUTCU DMS! You're almost there.
+      Please verify your email address to activate your account and complete registration.
     </p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#F0F4FF;border-radius:8px;margin-bottom:24px;">
-      <tr><td style="padding:16px 20px;">
-        <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:1px;">Your Login Details</p>
-        <p style="margin:0 0 4px;font-size:13px;color:#04003D;"><strong>Email:</strong> ${user.email}</p>
-        <p style="margin:0 0 4px;font-size:13px;color:#04003D;"><strong>Temporary Password:</strong>
-          <code style="background:#fff;padding:2px 8px;border-radius:4px;font-size:13px;border:1px solid #E2E8F0;">${user.temp_password || '(see admin)'}</code>
-        </p>
-        ${user.mutcu_number ? `<p style="margin:4px 0 0;font-size:13px;color:#04003D;"><strong>MUTCU Number:</strong> <span style="color:#FF9700;font-weight:700;">${user.mutcu_number}</span></p>` : ''}
-      </td></tr>
-    </table>
-    <p style="margin:0 0 20px;font-size:13px;color:#4A5568;line-height:1.6;">
-      You will be prompted to change your password on first login. Please keep your credentials safe.
-    </p>
-    <div style="text-align:center;margin-bottom:8px;">
-      <a href="${FRONTEND}/login" style="display:inline-block;background:#FF9700;color:#ffffff;font-weight:700;font-size:14px;padding:12px 32px;border-radius:8px;text-decoration:none;">
-        Sign In to MUTCU DMS &rarr;
+    <div style="text-align:center;margin-bottom:24px;">
+      <a href="${verifyUrl}" style="display:inline-block;background:#FF9700;color:#ffffff;font-weight:700;font-size:14px;padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.5px;">
+        Verify My Email &rarr;
       </a>
     </div>
+    <p style="margin:0 0 8px;font-size:12px;color:#718096;line-height:1.6;">
+      If the button doesn't work, copy and paste this link into your browser:
+    </p>
+    <p style="margin:0 0 20px;font-size:11px;color:#FF9700;word-break:break-all;">${verifyUrl}</p>
+    <div style="background:#F0F4FF;border-radius:8px;padding:12px 16px;">
+      <p style="margin:0;font-size:12px;color:#4A5568;line-height:1.6;">
+        ⏱ This link expires in <strong>24 hours</strong>.<br>
+        After verifying, your membership application will be reviewed by the CU Secretary.
+      </p>
+    </div>
     `,
-    'This email was sent because you were enrolled by the CU Secretary. If this was a mistake, please contact admin.'
+    'If you did not register for MUTCU DMS, you can safely ignore this email.'
   )
-  return sendEmail({ to: user.email, subject: 'Welcome to MUTCU DMS — Your Account is Ready', html })
+  return sendEmail({ to: user.email, subject: 'MUTCU DMS — Please Verify Your Email Address', html })
 }
 
 // ─── 2. Approval email (self-registered member approved) ────────────────────

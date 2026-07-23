@@ -92,7 +92,7 @@ export default function Register() {
         } catch {}
       }
 
-      toast.success('Registration successful! Please verify your email.')
+      toast.success('Registration successful! Please check your email to verify your account.')
       navigate('/verify-email')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Registration failed')

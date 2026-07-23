@@ -6,7 +6,7 @@ const router = express.Router()
 const supabase = require('../lib/supabase')
 const { signToken } = require('../lib/jwt')
 const { authenticate } = require('../middleware/auth')
-const { sendPasswordResetEmail } = require('../lib/email')
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../lib/email')
 
 function calcGraduationYear(studentId) {
   if (!studentId) return null
@@ -34,6 +34,7 @@ router.post('/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10)
     const schoolPrefix = student_id ? student_id.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase() : ''
+    const verificationToken = uuidv4()
 
     const { data: user, error } = await supabase.from('users').insert({
       name, email, password: hashedPassword, phone: phone || null,
@@ -45,15 +46,26 @@ router.post('/register', async (req, res) => {
       faith_declaration_signed: true, declaration_signed_at: new Date().toISOString(),
       enrollment_status: 'pending', enrollment_year: new Date().getFullYear(),
       membership_year: new Date().getFullYear(),
-      email_verified: true,
+      email_verified: false,
+      email_verification_token: verificationToken,
+      email_verification_sent_at: new Date().toISOString(),
       is_active: true, profile_complete: false, disciplinary_status: 'clear',
       must_change_password: false, is_temp_password: false,
     }).select().single()
 
     if (error) throw error
 
+    // Send verification email (fire and forget)
+    sendVerificationEmail(user, verificationToken).catch(err =>
+      console.error('[VERIFICATION EMAIL ERROR]', err.message)
+    )
+
     const token = signToken({ id: user.id, role: user.role })
-    res.status(201).json({ token, user: sanitizeUser(user), message: 'Registration successful! Welcome to MUTCU DMS.' })
+    res.status(201).json({
+      token,
+      user: sanitizeUser(user),
+      message: 'Registration successful! Please check your email to verify your account.',
+    })
   } catch (err) {
     console.error('Register error:', err.message)
     res.status(500).json({ error: err.message })
@@ -72,6 +84,15 @@ router.post('/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password)
     if (!valid) return res.status(401).json({ error: 'Incorrect password' })
     if (!user.is_active) return res.status(403).json({ error: 'Account deactivated' })
+
+    // Block login if email not verified (only for self-registered users, not secretary-enrolled)
+    if (!user.email_verified && !user.is_temp_password) {
+      return res.status(403).json({
+        error: 'Please verify your email before logging in. Check your inbox for the verification link.',
+        code: 'EMAIL_NOT_VERIFIED',
+        email: user.email,
+      })
+    }
 
     const token = signToken({ id: user.id, role: user.role })
 
@@ -92,14 +113,48 @@ router.get('/me', authenticate, async (req, res) => {
   res.json({ user: sanitizeUser(req.user) })
 })
 
-// POST /api/auth/verify-email (paused)
+// POST /api/auth/verify-email
 router.post('/verify-email', async (req, res) => {
-  res.json({ message: 'Email verification is currently paused.' })
+  try {
+    const { token, id } = req.body
+    if (!token || !id) return res.status(400).json({ error: 'Invalid verification link' })
+
+    const { data: user } = await supabase.from('users').select('*').eq('id', id).eq('email_verification_token', token).single()
+    if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' })
+    if (user.email_verified) return res.json({ message: 'Email already verified. You can log in.' })
+
+    await supabase.from('users').update({
+      email_verified: true,
+      email_verification_token: null,
+    }).eq('id', id)
+
+    res.json({ message: 'Email verified successfully! You can now log in.' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
-// POST /api/auth/resend-verification (paused)
+// POST /api/auth/resend-verification
 router.post('/resend-verification', authenticate, async (req, res) => {
-  res.json({ message: 'Email verification is currently paused.' })
+  try {
+    const user = req.user
+    if (user.email_verified) return res.json({ message: 'Your email is already verified.' })
+
+    const token = uuidv4()
+    await supabase.from('users').update({
+      email_verification_token: token,
+      email_verification_sent_at: new Date().toISOString(),
+    }).eq('id', user.id)
+
+    // Fire and forget
+    sendVerificationEmail(user, token).catch(err =>
+      console.error('[RESEND VERIFICATION ERROR]', err.message)
+    )
+
+    res.json({ message: 'Verification email resent! Please check your inbox.' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // POST /api/auth/forgot-password
@@ -110,10 +165,10 @@ router.post('/forgot-password', async (req, res) => {
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
 
-    // Always respond the same way — don't reveal if email exists
+    // Always respond the same — don't reveal if email exists
     res.json({ message: 'If this email exists, a reset link has been sent to your inbox.' })
 
-    if (!user) return // stop here silently
+    if (!user) return
 
     const token = uuidv4()
     const expires = new Date(Date.now() + 3600000).toISOString() // 1 hour
@@ -122,7 +177,7 @@ router.post('/forgot-password', async (req, res) => {
       password_reset_expires: expires,
     }).eq('id', user.id)
 
-    // Fire and forget — send reset email via Brevo
+    // Fire and forget
     sendPasswordResetEmail(user, token).catch(err =>
       console.error('[PASSWORD RESET EMAIL ERROR]', err.message)
     )

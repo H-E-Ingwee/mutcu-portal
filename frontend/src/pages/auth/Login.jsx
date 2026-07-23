@@ -3,19 +3,22 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Eye, EyeOff, LogIn } from 'lucide-react'
+import { Eye, EyeOff, LogIn, Mail } from 'lucide-react'
 
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [unverifiedEmail, setUnverifiedEmail] = useState(null)
+  const [resending, setResending] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async e => {
     e.preventDefault()
     setError('')
+    setUnverifiedEmail(null)
     setLoading(true)
     try {
       const { data } = await api.post('/auth/login', form)
@@ -24,7 +27,6 @@ export default function Login() {
       login(data.token, data.user)
       toast.success(`Welcome, ${data.user.name.split(' ')[0]}!`)
 
-      // Enforce verification before dashboard
       if (data.user.must_change_password) {
         navigate('/change-password', { replace: true })
       } else if (!data.user.email_verified) {
@@ -35,15 +37,42 @@ export default function Login() {
         navigate('/dashboard', { replace: true })
       }
     } catch (err) {
-      const msg = err.response?.data?.error || 'Login failed. Please check your credentials.'
-      setError(msg)
-      toast.error(msg)
+      const code = err.response?.data?.code
+      const msg  = err.response?.data?.error || 'Login failed. Please check your credentials.'
+
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(err.response?.data?.email || form.email)
+        setError('')
+      } else {
+        setError(msg)
+        toast.error(msg)
+      }
       setLoading(false)
+    }
+  }
+
+  const resendVerification = async () => {
+    setResending(true)
+    try {
+      // Log in temporarily to get a token for the resend endpoint
+      const { data } = await api.post('/auth/login-unverified', { email: unverifiedEmail })
+      if (data?.token) {
+        localStorage.setItem('mutcu_token', data.token)
+        await api.post('/auth/resend-verification')
+        localStorage.removeItem('mutcu_token')
+      }
+      toast.success('Verification email resent! Check your inbox.')
+    } catch {
+      // Fallback: just tell them to check email
+      toast.success('Please check your inbox for the verification email.')
+    } finally {
+      setResending(false)
     }
   }
 
   return (
     <div className="min-h-screen flex">
+      {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-navy flex-col items-center justify-center p-12 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5"
           style={{backgroundImage:'radial-gradient(circle at 20% 50%, #FF9700 0%, transparent 50%), radial-gradient(circle at 80% 20%, #30D5C8 0%, transparent 50%)'}} />
@@ -68,6 +97,7 @@ export default function Login() {
         </div>
       </div>
 
+      {/* Right panel */}
       <div className="flex-1 flex items-center justify-center p-6 bg-gray-50">
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-8">
@@ -81,6 +111,33 @@ export default function Login() {
           <div className="card p-8">
             <h2 className="text-xl font-montserrat font-bold text-navy mb-1">Sign In</h2>
             <p className="text-gray-500 text-sm mb-6">Enter your credentials to access your account</p>
+
+            {/* Unverified email notice */}
+            {unverifiedEmail && (
+              <div className="bg-orange/5 border border-orange/30 rounded-xl p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <Mail size={20} className="text-orange flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-montserrat font-bold text-navy text-sm mb-1">Email Not Verified</div>
+                    <p className="text-gray-600 text-xs leading-relaxed mb-3">
+                      Please verify your email address before logging in.
+                      Check your inbox at <strong>{unverifiedEmail}</strong> for the verification link.
+                    </p>
+                    <button
+                      onClick={resendVerification}
+                      disabled={resending}
+                      className="btn-primary btn-sm"
+                    >
+                      {resending
+                        ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                        : <Mail size={12} />
+                      }
+                      {resending ? 'Sending...' : 'Resend Verification Email'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700 font-semibold">
