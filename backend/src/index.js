@@ -69,6 +69,9 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`MUTCU DMS API v2.1 running on port ${PORT}`)
+  // Verify Brevo SMTP connection on startup
+  const { verifyConnection } = require('./lib/email')
+  verifyConnection()
 })
 
 module.exports = app

@@ -6,6 +6,7 @@ const router = express.Router()
 const supabase = require('../lib/supabase')
 const { signToken } = require('../lib/jwt')
 const { authenticate } = require('../middleware/auth')
+const { sendPasswordResetEmail } = require('../lib/email')
 
 function calcGraduationYear(studentId) {
   if (!studentId) return null
@@ -74,7 +75,7 @@ router.post('/login', async (req, res) => {
 
     const token = signToken({ id: user.id, role: user.role })
 
-    // Fire and forget audit log - use then/catch not .catch on query directly
+    // Fire and forget audit log
     supabase.from('audit_logs').insert({
       actor_id: user.id, action: 'auth.login', description: 'User signed in'
     }).then(() => {}).catch(() => {})
@@ -108,21 +109,23 @@ router.post('/forgot-password', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email is required' })
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
-    if (!user) return res.json({ message: 'If this email exists, a reset link has been sent.' })
+
+    // Always respond the same way — don't reveal if email exists
+    res.json({ message: 'If this email exists, a reset link has been sent to your inbox.' })
+
+    if (!user) return // stop here silently
 
     const token = uuidv4()
-    const expires = new Date(Date.now() + 3600000).toISOString()
-    await supabase.from('users').update({ password_reset_token: token, password_reset_expires: expires }).eq('id', user.id)
+    const expires = new Date(Date.now() + 3600000).toISOString() // 1 hour
+    await supabase.from('users').update({
+      password_reset_token: token,
+      password_reset_expires: expires,
+    }).eq('id', user.id)
 
-    const frontendUrl = (process.env.FRONTEND_URL || 'https://mutcu-portal.vercel.app').trim()
-    const resetUrl = `${frontendUrl}/reset-password?token=${token}`
-    console.log(`[PASSWORD RESET] ${user.email}: ${resetUrl}`)
-
-    res.json({
-      message: 'Password reset link generated.',
-      reset_url: resetUrl,
-      note: 'Copy this link and open it in your browser to reset your password.'
-    })
+    // Fire and forget — send reset email via Brevo
+    sendPasswordResetEmail(user, token).catch(err =>
+      console.error('[PASSWORD RESET EMAIL ERROR]', err.message)
+    )
   } catch (err) {
     console.error('Forgot password error:', err.message)
     res.status(500).json({ error: 'Failed to process request.' })
@@ -134,11 +137,21 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { token, password } = req.body
     if (!token || !password) return res.status(400).json({ error: 'Token and password required' })
+
     const { data: user } = await supabase.from('users').select('*').eq('password_reset_token', token).single()
     if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' })
-    if (new Date(user.password_reset_expires) < new Date()) return res.status(400).json({ error: 'Reset link expired.' })
+    if (new Date(user.password_reset_expires) < new Date()) {
+      return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' })
+    }
+
     const hashed = await bcrypt.hash(password, 10)
-    await supabase.from('users').update({ password: hashed, password_reset_token: null, password_reset_expires: null, must_change_password: false }).eq('id', user.id)
+    await supabase.from('users').update({
+      password: hashed,
+      password_reset_token: null,
+      password_reset_expires: null,
+      must_change_password: false,
+    }).eq('id', user.id)
+
     res.json({ message: 'Password reset successfully. You can now log in.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -153,7 +166,11 @@ router.post('/change-password', authenticate, async (req, res) => {
     const valid = await bcrypt.compare(current_password, user.password)
     if (!valid) return res.status(400).json({ error: 'Current password is incorrect' })
     const hashed = await bcrypt.hash(password, 10)
-    await supabase.from('users').update({ password: hashed, must_change_password: false, is_temp_password: false }).eq('id', req.user.id)
+    await supabase.from('users').update({
+      password: hashed,
+      must_change_password: false,
+      is_temp_password: false,
+    }).eq('id', req.user.id)
     res.json({ message: 'Password changed successfully' })
   } catch (err) {
     res.status(500).json({ error: err.message })
