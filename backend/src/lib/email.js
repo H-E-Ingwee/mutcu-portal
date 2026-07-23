@@ -20,12 +20,7 @@ function htmlWrap(title, bodyHtml, footerNote = '') {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7FA;padding:32px 0;">
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.08);max-width:560px;width:100%;">
-        <tr>
-          <td style="background:linear-gradient(135deg,#04003D 0%,#0a0060 100%);padding:28px 32px;text-align:center;">
-            <div style="font-size:22px;font-weight:800;color:#FF9700;letter-spacing:1px;font-family:Arial,sans-serif;">MUTCU DMS</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:4px;letter-spacing:2px;text-transform:uppercase;">Murang'a University of Technology Christian Union</div>
-          </td>
-        </tr>
+        
         <tr>
           <td style="padding:32px 32px 24px;">
             ${bodyHtml}
