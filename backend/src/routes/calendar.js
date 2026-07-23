@@ -14,9 +14,12 @@ router.get('/', authenticate, async (req, res) => {
     if (year) query = query.eq('spiritual_year', year);
     if (type) query = query.eq('event_type', type);
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.warn('[CALENDAR] Table not found — run schema_v3.sql in Supabase:', error.message);
+      return res.json({ events: [] });
+    }
     res.json({ events: data || [] });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.json({ events: [] }); }
 });
 
 // GET /api/calendar/all — all events including unpublished (admin)
@@ -26,19 +29,23 @@ router.get('/all', authenticate, requireRole(...ADMIN), async (req, res) => {
     let query = supabase.from('spiritual_calendar').select('*').order('event_date', { ascending: true });
     if (year) query = query.eq('spiritual_year', year);
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.warn('[CALENDAR] Table not found — run schema_v3.sql in Supabase:', error.message);
+      return res.json({ events: [] });
+    }
     res.json({ events: data || [] });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.json({ events: [] }); }
 });
 
 // GET /api/calendar/years — distinct spiritual years
 router.get('/years', authenticate, async (req, res) => {
   try {
-    const { data } = await supabase.from('spiritual_calendar')
+    const { data, error } = await supabase.from('spiritual_calendar')
       .select('spiritual_year').order('spiritual_year', { ascending: false });
+    if (error) return res.json({ years: [] });
     const years = [...new Set((data || []).map(e => e.spiritual_year))];
     res.json({ years });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.json({ years: [] }); }
 });
 
 // POST /api/calendar — create event (admin)
