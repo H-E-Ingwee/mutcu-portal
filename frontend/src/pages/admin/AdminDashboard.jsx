@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
-import { Users, Clock, CheckCircle, BookOpen, Settings, BarChart3, Shield, ClipboardList, ChevronRight } from 'lucide-react'
+import { Users, Clock, CheckCircle, BookOpen, Settings, BarChart3, Shield, ClipboardList, ChevronRight, ShieldAlert } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 export default function AdminDashboard() {
@@ -79,6 +79,7 @@ export default function AdminDashboard() {
               { label: 'Analytics', sub: 'Data insights', to: '/analytics', icon: BarChart3 },
               { label: 'Role Management', sub: 'Assign roles', to: '/admin/roles', icon: Shield },
               { label: 'Audit Log', sub: 'System activity', to: '/admin/audit-log', icon: ClipboardList },
+              { label: 'Disciplinary', sub: 'Case management', to: '/admin/disciplinary', icon: ShieldAlert },
               { label: 'System Settings', sub: 'Configure portal', to: '/admin/settings', icon: Settings },
             ].map((link, i) => (
               <Link key={i} to={link.to} className="flex items-center justify-between px-5 py-3 border-b border-gray-50 hover:bg-gray-50 transition-all last:border-0">

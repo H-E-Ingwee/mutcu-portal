@@ -5,7 +5,7 @@ import api from '../lib/api'
 import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
-  MessageSquare, ClipboardList, Megaphone, History, Send, X, CalendarDays
+  MessageSquare, ClipboardList, Megaphone, History, Send, X, CalendarDays, ShieldAlert
 } from 'lucide-react'
 
 export default function Layout() {
@@ -121,6 +121,7 @@ export default function Layout() {
               <NavItem to="/admin/positions" icon={Award} label="EC Positions" />
               <NavItem to="/admin/messages" icon={MessageSquare} label="Messages" />
               <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
+              <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
               <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
               <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
               <NavItem to="/admin/settings" icon={Settings} label="System Settings" />

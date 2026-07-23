@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Plus, ThumbsUp, ThumbsDown, Clock, UserPlus } from 'lucide-react'
+import { ArrowLeft, Plus, ThumbsUp, ThumbsDown, Clock, UserPlus, Sparkles, Printer } from 'lucide-react'
 
 export default function NCPosition() {
   const { positionId } = useParams()
@@ -48,6 +48,97 @@ export default function NCPosition() {
       )
       setAddResults(filtered.slice(0, 8))
     } catch {} finally { setSearching(false) }
+  }
+
+  const [aiSummaries, setAiSummaries] = useState({})
+  const [loadingAI, setLoadingAI] = useState({})
+
+  const getAISummary = async (candidate) => {
+    setLoadingAI(prev => ({ ...prev, [candidate.id]: true }))
+    try {
+      const { data } = await api.post('/nc/ai-summary', {
+        candidate,
+        position: data?.position,
+        recommendations: candidate.recommendations,
+        eligibility: candidate.eligibility,
+      })
+      setAiSummaries(prev => ({ ...prev, [candidate.id]: data.summary }))
+      toast.success('AI summary generated')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'AI summary failed')
+    } finally {
+      setLoadingAI(prev => ({ ...prev, [candidate.id]: false }))
+    }
+  }
+
+  const printReport = async () => {
+    try {
+      const { data: report } = await api.get('/nc/report')
+      const posReport = report.positions?.find(p => p.position?.id === positionId)
+      if (!posReport) return toast.error('No report data')
+      const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      const html = `<!DOCTYPE html><html><head><title>NC Vetting Report — ${posReport.position?.title}</title>
+      <style>
+        * { margin:0;padding:0;box-sizing:border-box; }
+        body { font-family:Arial,sans-serif;color:#1a1a2e;background:#fff; }
+        .header { background:linear-gradient(135deg,#04003D,#0a0060);color:white;padding:24px 40px;display:flex;justify-content:space-between;align-items:center; }
+        .header h1 { font-size:20px;font-weight:800;color:#FF9700; }
+        .header p { font-size:10px;color:rgba(255,255,255,0.5);margin-top:3px; }
+        .header-right { text-align:right;font-size:10px;color:rgba(255,255,255,0.5); }
+        .body { padding:28px 40px; }
+        .section-title { font-size:13px;font-weight:800;color:#04003D;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #FF9700;padding-bottom:6px;margin:20px 0 14px; }
+        .candidate { border:1px solid #E5E7EB;border-radius:8px;padding:16px;margin-bottom:12px;page-break-inside:avoid; }
+        .candidate-header { display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px; }
+        .candidate-name { font-size:14px;font-weight:800;color:#04003D; }
+        .badge { display:inline-block;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700; }
+        .badge-approved { background:#D1FAE5;color:#065F46; }
+        .badge-rejected { background:#FEE2E2;color:#991B1B; }
+        .badge-deferred { background:#FEF3C7;color:#92400E; }
+        .badge-pending { background:#F3F4F6;color:#6B7280; }
+        .checks { display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:8px 0; }
+        .check { font-size:9px;padding:3px 6px;border-radius:4px; }
+        .check-pass { background:#F0FFF4;color:#276749; }
+        .check-fail { background:#FFF5F5;color:#C53030; }
+        .recs { font-size:10px;color:#6B7280;margin-top:8px; }
+        .ai-summary { background:#F0F4FF;border-left:3px solid #FF9700;padding:8px 12px;margin-top:8px;font-size:10px;color:#374151;line-height:1.6; }
+        .footer { background:#F5F7FA;padding:14px 40px;text-align:center;font-size:9px;color:#9CA3AF;border-top:1px solid #E5E7EB;margin-top:32px; }
+        @media print { body { -webkit-print-color-adjust:exact;print-color-adjust:exact; } }
+      </style></head><body>
+      <div class="header">
+        <div><h1>MUTCU DMS — NC Vetting Report</h1><p>${report.cycle?.title} · ${report.cycle?.spiritual_year}</p></div>
+        <div class="header-right">Position: <strong style="color:#FF9700">${posReport.position?.title}</strong><br>Generated: ${date}<br>By: ${report.generatedBy}</div>
+      </div>
+      <div class="body">
+        <div class="section-title">Candidates (${posReport.decisions?.length || 0})</div>
+        ${(posReport.decisions || []).map(d => {
+          const decClass = d.decision === 'approved' ? 'badge-approved' : d.decision === 'rejected' ? 'badge-rejected' : d.decision === 'deferred' ? 'badge-deferred' : 'badge-pending'
+          const decLabel = d.decision ? d.decision.charAt(0).toUpperCase() + d.decision.slice(1) : 'Pending'
+          return `<div class="candidate">
+            <div class="candidate-header">
+              <div>
+                <div class="candidate-name">${d.candidate?.name}</div>
+                <div style="font-size:10px;color:#6B7280;margin-top:2px">${d.candidate?.mutcu_number || ''} · Year ${d.candidate?.year_of_study || '?'} · ${d.candidate?.primary_ministry || 'General'} · ${d.candidate?.gender || ''}</div>
+              </div>
+              <div style="text-align:right">
+                <span class="badge ${decClass}">${decLabel}</span>
+                <div style="font-size:9px;color:#6B7280;margin-top:4px">${d.recommendation_count} recommendation${d.recommendation_count !== 1 ? 's' : ''}</div>
+              </div>
+            </div>
+            ${d.reason ? `<div style="font-size:10px;color:#374151;margin-bottom:6px"><strong>NC Reason:</strong> ${d.reason}</div>` : ''}
+            ${d.ai_summary ? `<div class="ai-summary"><strong>AI Summary:</strong> ${d.ai_summary}</div>` : ''}
+          </div>`
+        }).join('')}
+        <div class="section-title">NC Members</div>
+        <div style="font-size:11px;color:#374151">${(report.ncMembers || []).map(m => m.user?.name).join(', ') || 'Not recorded'}</div>
+      </div>
+      <div class="footer">MUTCU Digital Management System · portal.mutcu.org · Inspire Love, Hope & Godliness</div>
+      </body></html>`
+      const win = window.open('', '_blank')
+      win.document.write(html)
+      win.document.close()
+      win.focus()
+      setTimeout(() => win.print(), 500)
+    } catch (err) { toast.error('Failed to generate report') }
   }
 
   const addNCCandidate = async (member) => {
@@ -96,8 +187,7 @@ export default function NCPosition() {
             {position?.gender_constraint && <span className="badge badge-navy ml-2">{position.gender_constraint} only</span>}
           </p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="btn-outline btn-sm">
-          <UserPlus size={14} />Add Candidate (NC)
+        
         </button>
       </div>
 
@@ -179,17 +269,7 @@ export default function NCPosition() {
                     ))}
                   </div>
 
-                  {/* Prayerful notes */}
-                  {candidate.recommendations?.filter(r=>r.note).length > 0 && (
-                    <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                      <div className="text-xs font-montserrat font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
-                        Member Notes ({candidate.recommendations.filter(r=>r.note).length})
-                      </div>
-                      {candidate.recommendations.filter(r=>r.note).slice(0,3).map((r,i) => (
-                        <div key={i} className="text-xs text-gray-600 italic mb-1">"{r.note}"</div>
-                      ))}
-                    </div>
-                  )}
+                  
                 </div>
 
                 {/* Decision Panel */}

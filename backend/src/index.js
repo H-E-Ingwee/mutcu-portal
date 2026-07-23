@@ -59,6 +59,7 @@ app.use('/api/announcements', require('./routes/announcements'))
 app.use('/api/leadership',    require('./routes/leadership'))
 app.use('/api/settings',      require('./routes/settings'))
 app.use('/api/calendar',      require('./routes/calendar'))
+app.use('/api/disciplinary',  require('./routes/disciplinary'))
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'MUTCU DMS API', version: '2.1.0' })

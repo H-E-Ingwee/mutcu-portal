@@ -44,6 +44,7 @@ import AdminAuditLog from './pages/admin/AdminAuditLog'
 import AdminPositions from './pages/admin/AdminPositions'
 import AdminMessages from './pages/admin/AdminMessages'
 import AdminSettings from './pages/admin/AdminSettings'
+import AdminDisciplinary from './pages/admin/AdminDisciplinary'
 
 function Spinner() {
   return (
@@ -131,6 +132,7 @@ function AppRoutes() {
         <Route path="admin/positions" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminPositions /></ProtectedRoute>} />
         <Route path="admin/messages" element={<ProtectedRoute roles={['ec_admin','super_admin','cu_secretary']}><AdminMessages /></ProtectedRoute>} />
         <Route path="admin/settings" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminSettings /></ProtectedRoute>} />
+        <Route path="admin/disciplinary" element={<ProtectedRoute roles={['ec_admin','super_admin','cu_secretary']}><AdminDisciplinary /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={['ec_admin','super_admin']}><Analytics /></ProtectedRoute>} />
       </Route>
 
