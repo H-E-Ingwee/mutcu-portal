@@ -109,13 +109,7 @@ router.put('/', authenticate, requireRole(...ADMIN), async (req, res) => {
         updates.push(key);
       }
     }
-    if (updates.length > 0) {
-      await supabase.from('audit_logs').insert({
-        actor_id: req.user.id,
-        action: 'settings.update',
-        description: 'Updated settings: ' + updates.join(', '),
-      }).catch(function() {});
-    }
+    
     res.json({
       message: updates.length + ' settings updated',
       updated: updates,
