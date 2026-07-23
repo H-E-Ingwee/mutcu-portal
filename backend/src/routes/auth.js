@@ -44,7 +44,6 @@ router.post('/register', async (req, res) => {
       faith_declaration_signed: true, declaration_signed_at: new Date().toISOString(),
       enrollment_status: 'pending', enrollment_year: new Date().getFullYear(),
       membership_year: new Date().getFullYear(),
-      // AUTO-VERIFY: email verification paused
       email_verified: true,
       is_active: true, profile_complete: false, disciplinary_status: 'clear',
       must_change_password: false, is_temp_password: false,
@@ -74,9 +73,15 @@ router.post('/login', async (req, res) => {
     if (!user.is_active) return res.status(403).json({ error: 'Account deactivated' })
 
     const token = signToken({ id: user.id, role: user.role })
-    supabase.from('audit_logs').insert({ actor_id: user.id, action: 'auth.login', description: 'User signed in' }).catch(() => {})
+
+    // Fire and forget audit log - use then/catch not .catch on query directly
+    supabase.from('audit_logs').insert({
+      actor_id: user.id, action: 'auth.login', description: 'User signed in'
+    }).then(() => {}).catch(() => {})
+
     res.json({ token, user: sanitizeUser(user) })
   } catch (err) {
+    console.error('Login error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -86,12 +91,12 @@ router.get('/me', authenticate, async (req, res) => {
   res.json({ user: sanitizeUser(req.user) })
 })
 
-// POST /api/auth/verify-email (kept for when email is re-enabled)
+// POST /api/auth/verify-email (paused)
 router.post('/verify-email', async (req, res) => {
-  res.json({ message: 'Email verification is currently paused. You can access the system directly.' })
+  res.json({ message: 'Email verification is currently paused.' })
 })
 
-// POST /api/auth/resend-verification
+// POST /api/auth/resend-verification (paused)
 router.post('/resend-verification', authenticate, async (req, res) => {
   res.json({ message: 'Email verification is currently paused.' })
 })
@@ -113,14 +118,14 @@ router.post('/forgot-password', async (req, res) => {
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`
     console.log(`[PASSWORD RESET] ${user.email}: ${resetUrl}`)
 
-    // Return the reset URL directly in response (temporary while email is paused)
     res.json({
-      message: 'Password reset link generated. Since email is paused, use the link below.',
+      message: 'Password reset link generated.',
       reset_url: resetUrl,
       note: 'Copy this link and open it in your browser to reset your password.'
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    console.error('Forgot password error:', err.message)
+    res.status(500).json({ error: 'Failed to process request.' })
   }
 })
 
@@ -131,7 +136,7 @@ router.post('/reset-password', async (req, res) => {
     if (!token || !password) return res.status(400).json({ error: 'Token and password required' })
     const { data: user } = await supabase.from('users').select('*').eq('password_reset_token', token).single()
     if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' })
-    if (new Date(user.password_reset_expires) < new Date()) return res.status(400).json({ error: 'Reset link expired. Please request a new one.' })
+    if (new Date(user.password_reset_expires) < new Date()) return res.status(400).json({ error: 'Reset link expired.' })
     const hashed = await bcrypt.hash(password, 10)
     await supabase.from('users').update({ password: hashed, password_reset_token: null, password_reset_expires: null, must_change_password: false }).eq('id', user.id)
     res.json({ message: 'Password reset successfully. You can now log in.' })
