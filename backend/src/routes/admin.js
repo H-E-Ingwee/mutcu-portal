@@ -5,7 +5,6 @@ const { authenticate, requireRole } = require('../middleware/auth')
 const { sendCycleAnnouncementEmail } = require('../lib/email')
 
 const ADMIN = ['super_admin','ec_admin']
-
 const CYCLE_STATUSES = ['setup','prayer_period','nominations_open','vetting','nominees_published','objection_period','pre_agm','commissioned']
 
 // GET /api/admin/dashboard
@@ -27,24 +26,55 @@ router.get('/dashboard', authenticate, requireRole(...ADMIN), async (req, res) =
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// POST /api/admin/cycles/:id/advance-status — advance cycle to next stage
+// POST /api/admin/cycles/:id/advance-status
 router.post('/cycles/:id/advance-status', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
-    const { data: cycle } = await supabase.from('nomination_cycles').select('status').eq('id', req.params.id).single()
+    const { data: cycle } = await supabase.from('nomination_cycles').select('*').eq('id', req.params.id).single()
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' })
     const currentIdx = CYCLE_STATUSES.indexOf(cycle.status)
     if (currentIdx === -1 || currentIdx >= CYCLE_STATUSES.length - 1) {
       return res.status(400).json({ error: 'Cannot advance from current status' })
     }
     const nextStatus = CYCLE_STATUSES[currentIdx + 1]
-    
+    const { data, error } = await supabase.from('nomination_cycles')
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).select().single()
+    if (error) throw error
+    res.json({ cycle: data, message: `Cycle advanced to: ${nextStatus.replace(/_/g,' ')}` })
 
-// POST /api/admin/cycles/:id/set-status — set specific status
+    // Fire and forget — bulk email members on key status changes
+    const emailStatuses = ['nominations_open', 'nominees_published', 'objection_period']
+    if (emailStatuses.includes(nextStatus)) {
+      try {
+        const { data: notifSetting } = await supabase.from('system_settings')
+          .select('value').eq('key', `notify_${nextStatus}`).single()
+        if (!notifSetting || notifSetting.value === 'true') {
+          const { data: members } = await supabase.from('users')
+            .select('email').eq('enrollment_status', 'active').eq('is_active', true)
+          if (members && members.length > 0) {
+            const emails = members.map(m => m.email).filter(Boolean)
+            sendCycleAnnouncementEmail({
+              recipientEmails: emails,
+              cycleTitle: data.title,
+              spiritualYear: data.spiritual_year,
+              status: nextStatus,
+              closeDate: nextStatus === 'nominations_open' ? data.nomination_close_date
+                       : nextStatus === 'objection_period' ? data.objection_deadline : null,
+            }).catch(e => console.error('[CYCLE EMAIL ERROR]', e.message))
+          }
+        }
+      } catch (e) { console.error('[CYCLE EMAIL SETUP ERROR]', e.message) }
+    }
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/admin/cycles/:id/set-status
 router.post('/cycles/:id/set-status', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
     const { status } = req.body
     if (!CYCLE_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' })
-    const { data, error } = await supabase.from('nomination_cycles').update({ status, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
+    const { data, error } = await supabase.from('nomination_cycles')
+      .update({ status, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
     if (error) throw error
     res.json({ cycle: data, message: `Status set to: ${status.replace(/_/g,' ')}` })
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -77,7 +107,8 @@ router.get('/cycles', authenticate, requireRole(...ADMIN), async (req, res) => {
 // POST /api/admin/cycles
 router.post('/cycles', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
-    const { data, error } = await supabase.from('nomination_cycles').insert({ ...req.body, created_by: req.user.id, status: 'setup' }).select().single()
+    const { data, error } = await supabase.from('nomination_cycles')
+      .insert({ ...req.body, created_by: req.user.id, status: 'setup' }).select().single()
     if (error) throw error
     res.status(201).json({ cycle: data })
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -86,7 +117,8 @@ router.post('/cycles', authenticate, requireRole(...ADMIN), async (req, res) => 
 // PUT /api/admin/cycles/:id
 router.put('/cycles/:id', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
-    const { data, error } = await supabase.from('nomination_cycles').update({ ...req.body, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
+    const { data, error } = await supabase.from('nomination_cycles')
+      .update({ ...req.body, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
     if (error) throw error
     res.json({ cycle: data })
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -100,10 +132,14 @@ router.post('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, r
     const { data: existing } = await supabase.from('nc_members').select('id').eq('cycle_id', cycleId).eq('user_id', user_id).single()
     let data, error
     if (existing) {
-      const result = await supabase.from('nc_members').update({ nc_role: nc_role||'member', appointed_by: req.user.id, appointed_at: new Date().toISOString() }).eq('id', existing.id).select().single()
+      const result = await supabase.from('nc_members')
+        .update({ nc_role: nc_role||'member', appointed_by: req.user.id, appointed_at: new Date().toISOString() })
+        .eq('id', existing.id).select().single()
       data = result.data; error = result.error
     } else {
-      const result = await supabase.from('nc_members').insert({ cycle_id: cycleId, user_id, nc_role: nc_role||'member', appointed_by: req.user.id, appointed_at: new Date().toISOString(), is_active: true }).select().single()
+      const result = await supabase.from('nc_members')
+        .insert({ cycle_id: cycleId, user_id, nc_role: nc_role||'member', appointed_by: req.user.id, appointed_at: new Date().toISOString(), is_active: true })
+        .select().single()
       data = result.data; error = result.error
     }
     if (error) throw error
@@ -115,7 +151,9 @@ router.post('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, r
 // GET /api/admin/cycles/:id/nc
 router.get('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
-    const { data } = await supabase.from('nc_members').select('*, user:user_id(id,name,photo_url,email,student_id,mutcu_number)').eq('cycle_id', req.params.id).eq('is_active', true)
+    const { data } = await supabase.from('nc_members')
+      .select('*, user:user_id(id,name,photo_url,email,student_id,mutcu_number)')
+      .eq('cycle_id', req.params.id).eq('is_active', true)
     res.json({ nc_members: data||[] })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -137,7 +175,11 @@ router.post('/cycles/:id/commission', authenticate, requireRole(...ADMIN), async
     await supabase.from('appointments').update({ is_current: false }).neq('cycle_id', cycleId)
     for (const nominee of nominees||[]) {
       const { count } = await supabase.from('appointments').select('*',{count:'exact',head:true}).eq('position_id',nominee.position_id).eq('user_id',nominee.candidate_id)
-      await supabase.from('appointments').insert({ cycle_id: cycleId, position_id: nominee.position_id, user_id: nominee.candidate_id, term_number: (count||0)+1, spiritual_year: cycle?.spiritual_year, commissioned_at: new Date().toISOString(), is_current: true })
+      await supabase.from('appointments').insert({
+        cycle_id: cycleId, position_id: nominee.position_id, user_id: nominee.candidate_id,
+        term_number: (count||0)+1, spiritual_year: cycle?.spiritual_year,
+        commissioned_at: new Date().toISOString(), is_current: true,
+      })
     }
     await supabase.from('nomination_cycles').update({ status: 'commissioned' }).eq('id', cycleId)
     res.json({ message: 'New EC commissioned successfully' })
@@ -167,7 +209,9 @@ router.put('/roles/:userId', authenticate, requireRole('super_admin'), async (re
 // GET /api/admin/finalists
 router.get('/finalists', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
-    const { data } = await supabase.from('users').select('id,name,email,student_id,mutcu_number,year_of_study,photo_url,gender').eq('enrollment_status','active').or('is_finalist.eq.true,year_of_study.gte.4').order('name')
+    const { data } = await supabase.from('users')
+      .select('id,name,email,student_id,mutcu_number,year_of_study,photo_url,gender')
+      .eq('enrollment_status','active').or('is_finalist.eq.true,year_of_study.gte.4').order('name')
     res.json({ finalists: data||[] })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -187,7 +231,11 @@ router.post('/members/bulk-approve', authenticate, requireRole('super_admin','ec
         let seq = lastUser && lastUser.length > 0 ? parseInt(lastUser[0].mutcu_number.split('-')[2]) + 1 : 2
         mutcuNumber = `MUTCU-${year}-${String(seq).padStart(4,'0')}`
       }
-      await supabase.from('users').update({ enrollment_status: 'active', mutcu_number: mutcuNumber, approved_by: req.user.id, approved_at: new Date().toISOString(), is_active: true, email_verified: true }).eq('id', id)
+      await supabase.from('users').update({
+        enrollment_status: 'active', mutcu_number: mutcuNumber,
+        approved_by: req.user.id, approved_at: new Date().toISOString(),
+        is_active: true, email_verified: true,
+      }).eq('id', id)
       approved++
     }
     res.json({ message: `${approved} members approved successfully`, count: approved })
@@ -197,9 +245,15 @@ router.post('/members/bulk-approve', authenticate, requireRole('super_admin','ec
 // GET /api/admin/export/members
 router.get('/export/members', authenticate, requireRole('super_admin','ec_admin','cu_secretary'), async (req, res) => {
   try {
-    const { data } = await supabase.from('users').select('name,email,mutcu_number,student_id,gender,year_of_study,membership_type,primary_ministry,enrollment_status,created_at').order('name')
+    const { data } = await supabase.from('users')
+      .select('name,email,mutcu_number,student_id,gender,year_of_study,membership_type,primary_ministry,enrollment_status,created_at')
+      .order('name')
     const headers = ['Name','Email','MUTCU Number','Student ID','Gender','Year','Membership Type','Ministry','Status','Registered']
-    const rows = (data||[]).map(m => [m.name,m.email,m.mutcu_number||'',m.student_id||'',m.gender||'',m.year_of_study||'',m.membership_type,m.primary_ministry||'General',m.enrollment_status,m.created_at?.split('T')[0]||''])
+    const rows = (data||[]).map(m => [
+      m.name, m.email, m.mutcu_number||'', m.student_id||'', m.gender||'',
+      m.year_of_study||'', m.membership_type, m.primary_ministry||'General',
+      m.enrollment_status, m.created_at?.split('T')[0]||'',
+    ])
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
     res.setHeader('Content-Type', 'text/csv')
     res.setHeader('Content-Disposition', 'attachment; filename="mutcu-members.csv"')
@@ -207,14 +261,14 @@ router.get('/export/members', authenticate, requireRole('super_admin','ec_admin'
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// GET /api/admin/settings
+// GET /api/admin/settings (legacy — kept for backward compat)
 router.get('/settings', authenticate, requireRole(...ADMIN), async (req, res) => {
   res.json({
     settings: {
       app_name: process.env.APP_NAME || 'MUTCU DMS',
       founding_year: process.env.MUTCU_FOUNDING_YEAR || '2026',
       frontend_url: process.env.FRONTEND_URL || 'https://mutcu-portal.vercel.app',
-      reply_email: process.env.MAIL_REPLY_TO || 'ingwebrian@gmail.com',
+      reply_email: process.env.MAIL_REPLY_TO || 'admin@mutcu.org',
     }
   })
 })
