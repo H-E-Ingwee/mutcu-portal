@@ -170,8 +170,14 @@ export default function NCPosition() {
             {position?.gender_constraint && <span className="badge badge-navy ml-2">{position.gender_constraint} only</span>}
           </p>
         </div>
-        
-        </button>
+        <div className="flex gap-2">
+          <button onClick={printReport} className="btn-outline btn-sm">
+            <Printer size={14} />Print Report
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="btn-outline btn-sm">
+            <UserPlus size={14} />Add Candidate (NC)
+          </button>
+        </div>
       </div>
 
       {/* Tally Overview */}
