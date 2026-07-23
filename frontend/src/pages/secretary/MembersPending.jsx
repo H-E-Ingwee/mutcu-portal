@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, CheckSquare, Square } from 'lucide-react'
 
 export default function MembersPending() {
   const [pending, setPending] = useState([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState({})
+  const [selected, setSelected] = useState([])
+  const [bulkApproving, setBulkApproving] = useState(false)
 
   useEffect(() => { api.get('/members/pending').then(r => setPending(r.data.members||[])).finally(() => setLoading(false)) }, [])
 
@@ -17,7 +19,8 @@ export default function MembersPending() {
       const { data } = await api.post(`/members/${id}/approve`)
       toast.success(data.message)
       setPending(prev => prev.filter(m => m.id !== id))
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed to approve') }
+      setSelected(prev => prev.filter(s => s !== id))
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
     finally { setProcessing(prev => ({...prev, [id]: null})) }
   }
 
@@ -28,29 +31,69 @@ export default function MembersPending() {
       await api.post(`/members/${id}/reject`)
       toast.success('Registration rejected')
       setPending(prev => prev.filter(m => m.id !== id))
-    } catch (err) { toast.error('Failed to reject') }
+      setSelected(prev => prev.filter(s => s !== id))
+    } catch (err) { toast.error('Failed') }
     finally { setProcessing(prev => ({...prev, [id]: null})) }
   }
+
+  const bulkApprove = async () => {
+    if (selected.length === 0) return toast.error('Select members to approve')
+    if (!window.confirm(`Approve ${selected.length} members?`)) return
+    setBulkApproving(true)
+    try {
+      const { data } = await api.post('/admin/members/bulk-approve', { member_ids: selected })
+      toast.success(data.message)
+      setPending(prev => prev.filter(m => !selected.includes(m.id)))
+      setSelected([])
+    } catch (err) { toast.error(err.response?.data?.error || 'Bulk approve failed') }
+    finally { setBulkApproving(false) }
+  }
+
+  const toggleSelect = id => setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
+  const selectAll = () => setSelected(pending.map(m => m.id))
+  const clearAll = () => setSelected([])
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
 
   return (
     <div>
       <div className="page-header">
-        <div><Link to="/secretary/members" className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 mb-2"><ArrowLeft size={12} />Back to Register</Link><h1 className="page-title">Pending Approvals</h1><p className="page-subtitle">{pending.length} members awaiting review</p></div>
+        <div><Link to="/secretary/members" className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 mb-2"><ArrowLeft size={12} />Back</Link><h1 className="page-title">Pending Approvals</h1><p className="page-subtitle">{pending.length} members awaiting review</p></div>
+        {pending.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {selected.length > 0 ? (
+              <>
+                <button onClick={clearAll} className="btn-outline btn-sm">Clear ({selected.length})</button>
+                <button onClick={bulkApprove} disabled={bulkApproving} className="btn-teal btn-sm">
+                  {bulkApproving ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <CheckCircle size={14} />}
+                  Approve Selected ({selected.length})
+                </button>
+              </>
+            ) : (
+              <button onClick={selectAll} className="btn-outline btn-sm"><CheckSquare size={14} />Select All</button>
+            )}
+          </div>
+        )}
       </div>
+
       {pending.length === 0 ? (
         <div className="card p-8 text-center"><CheckCircle size={40} className="text-green-400 mx-auto mb-3" /><div className="text-gray-500 text-sm">All registrations are up to date.</div></div>
       ) : (
         <div className="card">
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Member</th><th>Student ID</th><th>Ministry</th><th>Registered</th><th>Declaration</th><th>Actions</th></tr></thead>
+              <thead><tr><th style={{width:40}}></th><th>Member</th><th>Student ID</th><th>Ministry</th><th>Registered</th><th>Declaration</th><th>Actions</th></tr></thead>
               <tbody>
                 {pending.map(m => {
                   const photoUrl = m.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name||'M')}&background=04003D&color=FF9700&size=200&bold=true`
+                  const isSelected = selected.includes(m.id)
                   return (
-                    <tr key={m.id}>
+                    <tr key={m.id} className={isSelected ? 'bg-orange/5' : ''}>
+                      <td>
+                        <button onClick={() => toggleSelect(m.id)} className="text-gray-400 hover:text-orange transition-colors">
+                          {isSelected ? <CheckSquare size={16} className="text-orange" /> : <Square size={16} />}
+                        </button>
+                      </td>
                       <td>
                         <div className="flex items-center gap-2.5">
                           <img src={photoUrl} alt={m.name} className="w-10 h-10 rounded-full object-cover border-2 border-orange" />
@@ -64,12 +107,9 @@ export default function MembersPending() {
                       <td>
                         <div className="flex gap-1.5">
                           <button onClick={() => approve(m.id)} disabled={!!processing[m.id]} className="btn-teal btn-sm">
-                            {processing[m.id]==='approving' ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <CheckCircle size={13} />}
-                            Approve
+                            {processing[m.id]==='approving' ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <CheckCircle size={13} />}Approve
                           </button>
-                          <button onClick={() => reject(m.id)} disabled={!!processing[m.id]} className="btn-outline btn-sm text-red border-red/30">
-                            <XCircle size={13} />Reject
-                          </button>
+                          <button onClick={() => reject(m.id)} disabled={!!processing[m.id]} className="btn-outline btn-sm text-red border-red/30"><XCircle size={13} />Reject</button>
                           <Link to={`/secretary/members/${m.id}/edit`} className="btn-outline btn-sm text-xs">View</Link>
                         </div>
                       </td>

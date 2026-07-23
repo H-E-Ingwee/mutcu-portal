@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Camera, Save, Lock } from 'lucide-react'
+import { Camera, Save, Lock, CheckCircle, Circle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export default function ProfileEdit() {
@@ -34,15 +34,46 @@ export default function ProfileEdit() {
 
   const photoUrl = preview || user?.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name||'M')}&background=04003D&color=FF9700&size=200&bold=true`
 
+  // Profile completion steps
+  const steps = [
+    { label: 'Account created', done: true },
+    { label: 'Passport photo uploaded', done: !!user?.photo_url },
+    { label: 'Student ID added', done: !!user?.student_id },
+    { label: 'Ministry assigned', done: !!user?.primary_ministry },
+    { label: 'Membership approved', done: user?.enrollment_status === 'active' },
+    { label: 'MUTCU number assigned', done: !!user?.mutcu_number },
+  ]
+  const completedSteps = steps.filter(s => s.done).length
+  const completionPct = Math.round((completedSteps / steps.length) * 100)
+
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="page-header"><div><h1 className="page-title">My Profile</h1><p className="page-subtitle">Update your photo and contact details</p></div></div>
+      <div className="page-header"><div><h1 className="page-title">My Profile</h1></div></div>
 
-      {/* Profile summary */}
+      {/* Completion Progress */}
+      <div className="card p-5 mb-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-montserrat font-bold text-navy text-sm">Profile Completion</span>
+          <span className="font-montserrat font-bold text-orange text-sm">{completionPct}%</span>
+        </div>
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
+          <div className="h-full bg-gradient-to-r from-orange to-teal rounded-full transition-all duration-500" style={{width:`${completionPct}%`}} />
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {steps.map((s,i) => (
+            <div key={i} className="flex items-center gap-1.5 text-xs">
+              {s.done ? <CheckCircle size={12} className="text-teal flex-shrink-0" /> : <Circle size={12} className="text-gray-300 flex-shrink-0" />}
+              <span className={s.done ? 'text-gray-600' : 'text-gray-400'}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Profile Summary */}
       <div className="card p-5 mb-5 flex items-center gap-4">
         <div className="relative">
           <img src={photoUrl} alt={user?.name} className="w-16 h-16 rounded-full object-cover border-2 border-orange" />
-          <label className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange rounded-full flex items-center justify-center cursor-pointer">
+          <label className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange rounded-full flex items-center justify-center cursor-pointer hover:bg-orange/90">
             <Camera size={11} className="text-white" />
             <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
           </label>
@@ -62,8 +93,8 @@ export default function ProfileEdit() {
       <div className="card mb-5">
         <div className="card-header"><h2 className="font-montserrat font-bold text-navy text-sm">Account Information</h2></div>
         <div>
-          {[['Student Reg. No.', user?.student_id||'—'],['School', user?.school_prefix||'—'],['Gender', user?.gender ? user.gender.charAt(0).toUpperCase()+user.gender.slice(1) : '—'],['Year of Study', user?.year_of_study ? `Year ${user.year_of_study}` : '—'],['Valid Period', user?.graduation_year ? `${user?.enrollment_year||'—'} – ${user.graduation_year}` : '—']].map(([label, value], i) => (
-            <div key={i} className={`flex justify-between items-center px-5 py-3 text-sm ${i < 4 ? 'border-b border-gray-50' : ''}`}>
+          {[['Student Reg. No.',user?.student_id||'—'],['School',user?.school_prefix||'—'],['Gender',user?.gender?user.gender.charAt(0).toUpperCase()+user.gender.slice(1):'—'],['Year of Study',user?.year_of_study?`Year ${user.year_of_study}`:'—'],['Valid Period',user?.graduation_year?`${user?.enrollment_year||'—'} – ${user.graduation_year}`:'—']].map(([label,value],i) => (
+            <div key={i} className={`flex justify-between items-center px-5 py-3 text-sm ${i<4?'border-b border-gray-50':''}`}>
               <span className="text-gray-400 text-xs font-montserrat font-semibold uppercase tracking-wide">{label}</span>
               <span className="font-semibold text-navy">{value}</span>
             </div>

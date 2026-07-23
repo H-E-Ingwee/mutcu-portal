@@ -2,25 +2,28 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Mail, ArrowLeft, CheckCircle } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, Copy } from 'lucide-react'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [result, setResult] = useState(null)
 
   const handleSubmit = async e => {
     e.preventDefault()
     setLoading(true)
     try {
-      await api.post('/auth/forgot-password', { email })
-      setSent(true)
-      toast.success('Reset link sent!')
+      const { data } = await api.post('/auth/forgot-password', { email })
+      setResult(data)
+      toast.success('Reset link generated!')
     } catch (err) {
-      toast.error('Failed to send reset email. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+      toast.error('Failed. Please try again.')
+    } finally { setLoading(false) }
+  }
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(result.reset_url)
+    toast.success('Link copied!')
   }
 
   return (
@@ -31,42 +34,40 @@ export default function ForgotPassword() {
             <Mail size={24} className="text-navy" />
           </div>
           <h2 className="text-xl font-montserrat font-bold text-navy">Reset Password</h2>
-          <p className="text-gray-500 text-sm mt-1">Enter your email to receive a reset link</p>
+          <p className="text-gray-500 text-sm mt-1">Enter your email to get a reset link</p>
         </div>
 
-        {sent ? (
-          <div className="text-center py-4">
-            <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
-            <h3 className="font-montserrat font-bold text-navy mb-2">Reset Link Sent!</h3>
-            <p className="text-gray-500 text-sm mb-4">
-              Check your inbox at <strong>{email}</strong> for the password reset link.
-            </p>
-            <div className="bg-orange/5 border border-orange/20 rounded-lg p-3 text-xs text-orange mb-4">
-              Check your spam folder if you don't see it within a few minutes.
+        {result ? (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+              <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
+              <div className="font-semibold text-green-700 text-sm mb-1">Reset Link Generated!</div>
+              <div className="text-green-600 text-xs">{result.message}</div>
             </div>
-            <button onClick={() => setSent(false)} className="btn-outline btn-sm mx-auto">
-              Send Again
-            </button>
+            {result.reset_url && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-2 font-semibold">Your reset link:</div>
+                <div className="text-xs text-navy break-all mb-2">{result.reset_url}</div>
+                <button onClick={copyLink} className="btn-primary btn-sm w-full justify-center">
+                  <Copy size={13} />Copy Reset Link
+                </button>
+              </div>
+            )}
+            <div className="bg-orange/5 border border-orange/20 rounded-lg p-3 text-xs text-orange">
+              📧 Email delivery is temporarily paused. Use the link above to reset your password directly.
+            </div>
+            <button onClick={() => setResult(null)} className="btn-outline w-full justify-center btn-sm">Try Another Email</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="form-label">Email Address</label>
-              <input
-                type="email"
-                className="form-input"
-                placeholder="your@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
+              <input type="email" className="form-input" placeholder="your@email.com"
+                value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3">
-              {loading
-                ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                : <Mail size={16} />}
-              {loading ? 'Sending...' : 'Send Reset Link'}
+              {loading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Mail size={16} />}
+              {loading ? 'Generating...' : 'Get Reset Link'}
             </button>
           </form>
         )}

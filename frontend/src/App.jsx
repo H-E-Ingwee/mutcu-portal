@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
-import VerifyEmail from './pages/auth/VerifyEmail'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import ChangePassword from './pages/auth/ChangePassword'
@@ -57,19 +56,11 @@ function Spinner() {
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth()
   if (loading) return <Spinner />
-
   const token = localStorage.getItem('mutcu_token')
   const savedUser = localStorage.getItem('mutcu_user')
   const effectiveUser = user || (token && savedUser ? JSON.parse(savedUser) : null)
-
   if (!effectiveUser) return <Navigate to="/login" replace />
-
-  // Enforce email verification
-  if (!effectiveUser.email_verified) return <Navigate to="/verify-email" replace />
-
-  // Enforce password change
   if (effectiveUser.must_change_password) return <Navigate to="/change-password" replace />
-
   if (roles && !roles.includes(effectiveUser.role)) return <Navigate to="/dashboard" replace />
   return children
 }
@@ -85,22 +76,17 @@ function GuestRoute({ children }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public */}
       <Route path="/member/:mutcuNumber" element={<PublicProfile />} />
 
-      {/* Guest only */}
       <Route path="/" element={<GuestRoute><Login /></GuestRoute>} />
       <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
       <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
       <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
-      <Route path="/reset-password" element={<GuestRoute><ResetPassword /></GuestRoute>} />
-
-      {/* Auth - no layout, no verification required */}
-      <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/verify-email" element={<Navigate to="/dashboard" replace />} />
       <Route path="/change-password" element={<ChangePassword />} />
       <Route path="/profile/complete" element={<ProtectedRoute><ProfileComplete /></ProtectedRoute>} />
 
-      {/* Main app - requires email verification */}
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="profile/edit" element={<ProfileEdit />} />
@@ -130,7 +116,6 @@ function AppRoutes() {
         <Route path="admin/audit-log" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminAuditLog /></ProtectedRoute>} />
         <Route path="admin/positions" element={<ProtectedRoute roles={['ec_admin','super_admin']}><AdminPositions /></ProtectedRoute>} />
         <Route path="admin/messages" element={<ProtectedRoute roles={['ec_admin','super_admin','cu_secretary']}><AdminMessages /></ProtectedRoute>} />
-
         <Route path="analytics" element={<ProtectedRoute roles={['ec_admin','super_admin']}><Analytics /></ProtectedRoute>} />
       </Route>
 

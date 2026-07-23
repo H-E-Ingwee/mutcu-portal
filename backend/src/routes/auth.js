@@ -6,10 +6,6 @@ const router = express.Router()
 const supabase = require('../lib/supabase')
 const { signToken } = require('../lib/jwt')
 const { authenticate } = require('../middleware/auth')
-const { sendVerificationEmail, sendPasswordResetEmail } = require('../lib/email')
-
-// Get frontend URL - trim any whitespace/newlines
-const getFrontendUrl = () => (process.env.FRONTEND_URL || 'https://mutcu-portal.vercel.app').trim()
 
 function calcGraduationYear(studentId) {
   if (!studentId) return null
@@ -36,7 +32,6 @@ router.post('/register', async (req, res) => {
     if (existing) return res.status(400).json({ error: 'Email already registered' })
 
     const hashedPassword = await bcrypt.hash(password, 10)
-    const verificationToken = uuidv4()
     const schoolPrefix = student_id ? student_id.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase() : ''
 
     const { data: user, error } = await supabase.from('users').insert({
@@ -49,8 +44,8 @@ router.post('/register', async (req, res) => {
       faith_declaration_signed: true, declaration_signed_at: new Date().toISOString(),
       enrollment_status: 'pending', enrollment_year: new Date().getFullYear(),
       membership_year: new Date().getFullYear(),
-      email_verified: false, email_verification_token: verificationToken,
-      email_verification_sent_at: new Date().toISOString(),
+      // AUTO-VERIFY: email verification paused
+      email_verified: true,
       is_active: true, profile_complete: false, disciplinary_status: 'clear',
       must_change_password: false, is_temp_password: false,
     }).select().single()
@@ -58,10 +53,7 @@ router.post('/register', async (req, res) => {
     if (error) throw error
 
     const token = signToken({ id: user.id, role: user.role })
-    res.status(201).json({ token, user: sanitizeUser(user), message: 'Registration successful! Check your email to verify.' })
-
-    // Send email after responding
-    sendVerificationEmail(user, verificationToken).catch(e => console.error('Verification email failed:', e.message))
+    res.status(201).json({ token, user: sanitizeUser(user), message: 'Registration successful! Welcome to MUTCU DMS.' })
   } catch (err) {
     console.error('Register error:', err.message)
     res.status(500).json({ error: err.message })
@@ -94,31 +86,14 @@ router.get('/me', authenticate, async (req, res) => {
   res.json({ user: sanitizeUser(req.user) })
 })
 
-// POST /api/auth/verify-email
+// POST /api/auth/verify-email (kept for when email is re-enabled)
 router.post('/verify-email', async (req, res) => {
-  try {
-    const { token, id } = req.body
-    const { data: user } = await supabase.from('users').select('*').eq('id', id).single()
-    if (!user) return res.status(404).json({ error: 'User not found' })
-    if (user.email_verified) return res.json({ message: 'Email already verified' })
-    if (user.email_verification_token !== token) return res.status(400).json({ error: 'Invalid verification link' })
-    await supabase.from('users').update({ email_verified: true, email_verification_token: null }).eq('id', id)
-    res.json({ message: 'Email verified successfully!' })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
+  res.json({ message: 'Email verification is currently paused. You can access the system directly.' })
 })
 
 // POST /api/auth/resend-verification
 router.post('/resend-verification', authenticate, async (req, res) => {
-  try {
-    const token = uuidv4()
-    await supabase.from('users').update({ email_verification_token: token, email_verification_sent_at: new Date().toISOString() }).eq('id', req.user.id)
-    res.json({ message: 'Verification email sent!' })
-    sendVerificationEmail(req.user, token).catch(e => console.error('Resend failed:', e.message))
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
+  res.json({ message: 'Email verification is currently paused.' })
 })
 
 // POST /api/auth/forgot-password
@@ -128,18 +103,24 @@ router.post('/forgot-password', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email is required' })
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
-    res.json({ message: 'If this email exists, a reset link has been sent.' })
-
-    if (!user) return
+    if (!user) return res.json({ message: 'If this email exists, a reset link has been sent.' })
 
     const token = uuidv4()
     const expires = new Date(Date.now() + 3600000).toISOString()
     await supabase.from('users').update({ password_reset_token: token, password_reset_expires: expires }).eq('id', user.id)
 
-    sendPasswordResetEmail(user, token).catch(e => console.error('Reset email failed:', e.message))
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://mutcu-portal.vercel.app').trim()
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`
+    console.log(`[PASSWORD RESET] ${user.email}: ${resetUrl}`)
+
+    // Return the reset URL directly in response (temporary while email is paused)
+    res.json({
+      message: 'Password reset link generated. Since email is paused, use the link below.',
+      reset_url: resetUrl,
+      note: 'Copy this link and open it in your browser to reset your password.'
+    })
   } catch (err) {
-    console.error('Forgot password error:', err.message)
-    res.json({ message: 'If this email exists, a reset link has been sent.' })
+    res.status(500).json({ error: err.message })
   }
 })
 

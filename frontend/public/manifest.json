@@ -1,0 +1,14 @@
+{
+  "name": "MUTCU DMS",
+  "short_name": "MUTCU",
+  "description": "Murang'a University of Technology Christian Union Digital Management System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#04003D",
+  "theme_color": "#04003D",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/mutcu-icon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/mutcu-icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
