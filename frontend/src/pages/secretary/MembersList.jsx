@@ -43,8 +43,7 @@ export default function MembersList() {
       // Fallback: build CSV from current data
       const headers = ['Name','Email','MUTCU Number','Student ID','Gender','Year','Ministry','Status']
       const rows = members.map(m => [m.name,m.email,m.mutcu_number||'',m.student_id||'',m.gender||'',m.year_of_study||'',m.primary_ministry||'General',m.enrollment_status])
-      const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('
-')
+      const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('')
       const blob = new Blob([csv], { type: 'text/csv' })
       const url2 = URL.createObjectURL(blob)
       const a = document.createElement('a'); a.href=url2; a.download='mutcu-members.csv'; a.click()
