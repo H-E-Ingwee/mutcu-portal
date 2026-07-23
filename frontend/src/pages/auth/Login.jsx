@@ -5,6 +5,19 @@ import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
 
+function MutcuLogo({ size = 'md' }) {
+  const sizes = { sm: 'w-10 h-10', md: 'w-16 h-16', lg: 'w-20 h-20' }
+  return (
+    <div className={`${sizes[size]} bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden p-1.5 border border-gray-100`}>
+      <img
+        src="/mutcu-icon.png"
+        alt="MUTCU"
+        className="w-full h-full object-contain"
+      />
+    </div>
+  )
+}
+
 export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPass, setShowPass] = useState(false)
@@ -17,29 +30,17 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
       const { data } = await api.post('/auth/login', form)
-
-      // CRITICAL: Store token in localStorage FIRST
-      // so that any subsequent API calls have the token available
       localStorage.setItem('mutcu_token', data.token)
       localStorage.setItem('mutcu_user', JSON.stringify(data.user))
-
-      // Update React context
       login(data.token, data.user)
-
       toast.success(`Welcome, ${data.user.name.split(' ')[0]}!`)
-
-      // Determine where to go
       let destination = '/dashboard'
       if (data.user.must_change_password) destination = '/change-password'
       else if (!data.user.email_verified) destination = '/verify-email'
       else if (!data.user.profile_complete) destination = '/profile/complete'
-
-      // Navigate immediately - token is already in localStorage
       navigate(destination, { replace: true })
-
     } catch (err) {
       const msg = err.response?.data?.error || 'Login failed. Please check your credentials.'
       setError(msg)
@@ -55,11 +56,12 @@ export default function Login() {
         <div className="absolute inset-0 opacity-5"
           style={{backgroundImage:'radial-gradient(circle at 20% 50%, #FF9700 0%, transparent 50%), radial-gradient(circle at 80% 20%, #30D5C8 0%, transparent 50%)'}} />
         <div className="relative z-10 text-center">
-          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-            <span className="text-navy font-bold text-2xl font-montserrat">M</span>
+          <div className="flex justify-center mb-6">
+            <MutcuLogo size="lg" />
           </div>
-          <h1 className="text-4xl font-montserrat font-bold text-white mb-2">MUTCU DMS</h1>
-          <p className="text-white/60 text-sm mb-8">Digital Management System</p>
+          <h1 className="text-4xl font-montserrat font-bold text-white mb-1">MUTCU DMS</h1>
+          <p className="text-white/60 text-sm mb-2">Murang'a University of Technology</p>
+          <p className="text-white/40 text-xs mb-8 italic">Christian Union</p>
           <div className="space-y-4 text-left max-w-xs">
             {[
               'Digital membership enrollment & MUTCU numbers',
@@ -84,10 +86,13 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center p-6 bg-gray-50">
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-8">
-            <div className="w-16 h-16 bg-navy rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <span className="text-white font-bold text-xl font-montserrat">M</span>
+            <div className="flex justify-center mb-3">
+              <div className="w-16 h-16 bg-navy rounded-2xl flex items-center justify-center overflow-hidden p-1.5">
+                <img src="/mutcu-icon.png" alt="MUTCU" className="w-full h-full object-contain" />
+              </div>
             </div>
             <h1 className="text-2xl font-montserrat font-bold text-navy">MUTCU DMS</h1>
+            <p className="text-gray-400 text-xs mt-1 italic">Inspire Love, Hope & Godliness</p>
           </div>
 
           <div className="card p-8">
@@ -123,9 +128,7 @@ export default function Login() {
                 <Link to="/forgot-password" className="text-xs text-orange hover:underline">Forgot password?</Link>
               </div>
               <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3">
-                {loading
-                  ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                  : <LogIn size={16} />}
+                {loading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <LogIn size={16} />}
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
