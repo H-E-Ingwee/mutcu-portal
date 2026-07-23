@@ -64,21 +64,7 @@ router.get('/public', async (req, res) => {
   }
 });
 
-// PUT /api/settings — bulk update settings (admin)
-router.put('/', authenticate, requireRole(...ADMIN), async (req, res) => {
-  try {
-    const { settings } = req.body;
-    if (!settings || typeof settings !== 'object') {
-      return res.status(400).json({ error: 'settings object required' });
-    }
 
-    // Check table exists
-    const { error: tableCheck } = await supabase.from('system_settings').select('key').limit(1);
-    if (tableCheck) {
-      return res.status(503).json({
-        error: 'Settings table not initialized. Please run schema_v3.sql in Supabase SQL Editor first.',
-      });
-    }
 
     const updates = [];
     const errors = [];
@@ -124,12 +110,7 @@ router.put('/', authenticate, requireRole(...ADMIN), async (req, res) => {
       updated: updates,
       errors: errors.length > 0 ? errors : undefined,
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// PUT /api/settings/:key — update single setting (admin)
+  
 router.put('/:key', authenticate, requireRole(...ADMIN), async (req, res) => {
   try {
     const { value } = req.body;
