@@ -5,7 +5,7 @@ import api from '../lib/api'
 import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
-  MessageSquare, ClipboardList, Megaphone, History, Send
+  MessageSquare, ClipboardList, Megaphone, History, Send, X
 } from 'lucide-react'
 
 export default function Layout() {
@@ -74,8 +74,9 @@ export default function Layout() {
         {/* Logo */}
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <span className="text-navy font-bold text-sm font-montserrat">M</span>
+            <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden p-0.5">
+              <img src="/mutcu-icon.png" alt="MUTCU" className="w-full h-full object-contain"
+                onError={e => { e.target.style.display='none'; e.target.parentElement.innerHTML='<span class="text-navy font-bold text-sm font-montserrat">M</span>' }} />
             </div>
             <div>
               <div className="font-montserrat font-bold text-white text-sm">MUTCU DMS</div>
@@ -149,7 +150,11 @@ export default function Layout() {
         <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(true)} className="text-navy p-1 lg:hidden"><Menu size={20} /></button>
-            <span className="font-montserrat font-bold text-navy text-sm lg:hidden">MUTCU DMS</span>
+            <div className="flex items-center gap-2 lg:hidden">
+              <img src="/mutcu-icon.png" alt="MUTCU" className="w-6 h-6 object-contain"
+                onError={e => e.target.style.display='none'} />
+              <span className="font-montserrat font-bold text-navy text-sm">MUTCU DMS</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {/* Notifications */}
@@ -166,7 +171,10 @@ export default function Layout() {
                 <div className="absolute right-0 top-10 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <span className="font-montserrat font-bold text-navy text-sm">Notifications</span>
-                    {unreadCount > 0 && <button onClick={markAllRead} className="text-xs text-orange hover:underline">Mark all read</button>}
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && <button onClick={markAllRead} className="text-xs text-orange hover:underline">Mark all read</button>}
+                      <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
+                    </div>
                   </div>
                   <div className="max-h-72 overflow-y-auto">
                     {notifications.length === 0 ? (
