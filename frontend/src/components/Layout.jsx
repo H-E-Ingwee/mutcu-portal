@@ -96,7 +96,6 @@ export default function Layout() {
           <NavItem to="/leadership" icon={History} label="Leadership History" />
           <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
           <NavItem to="/constitution" icon={BookOpen} label="Constitution" />
-          <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
           <NavItem to="/contact" icon={Send} label="Contact Admin" />
 
           {isNC && isNC() && (
@@ -113,6 +112,7 @@ export default function Layout() {
               <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Secretary</div>
               <NavItem to="/secretary/members" icon={Users} label="Member Register" />
               <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" />
+              <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
             </>
           )}
 

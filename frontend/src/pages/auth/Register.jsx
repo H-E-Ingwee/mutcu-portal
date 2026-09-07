@@ -170,7 +170,8 @@ export default function Register() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const maxYear = getMaxYear(form.course_type, form.student_id)
+  // Diploma: max 3 years. Degree: max 5 years (shown for all — system determines finalist status)
+  const maxYear = form.course_type === 'diploma' ? 3 : 5
   const yearOptions = Array.from({ length: maxYear }, (_, i) => i + 1)
 
   const handlePhotoSelect = e => {
@@ -404,21 +405,10 @@ export default function Register() {
                     <select className="form-select" value={form.year_of_study} onChange={e => set('year_of_study', e.target.value)} required>
                       <option value="">Select</option>
                       {yearOptions.map(y => (
-                        <option key={y} value={y}>
-                          Year {y}{y === maxYear ? ' (Finalist)' : ''}
-                        </option>
+                        <option key={y} value={y}>Year {y}</option>
                       ))}
                     </select>
-                    {form.year_of_study && parseInt(form.year_of_study) === maxYear && (
-                      <p className="text-xs text-orange mt-1 font-semibold">
-                        ⚠️ As a finalist you can nominate others but cannot be nominated for EC positions (Art. 12.4.b)
-                      </p>
-                    )}
-                    {form.year_of_study && parseInt(form.year_of_study) === 1 && (
-                      <p className="text-xs text-orange mt-1 font-semibold">
-                        ⚠️ First-year students cannot nominate or be nominated (Art. 8.3.I.b)
-                      </p>
-                    )}
+                    {/* No limitation notices shown during registration */}
                   </div>
                 </div>
 
