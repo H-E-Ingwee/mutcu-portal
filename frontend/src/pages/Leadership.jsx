@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import api from '../lib/api'
-import { History, Filter, Search } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import toast from 'react-hot-toast'
+import { History, Filter, Search, Plus, Edit2, Trash2, X, Check } from 'lucide-react'
 
 export default function Leadership() {
+  const { isAdmin } = useAuth()
   const [current, setCurrent] = useState([])
   const [history, setHistory] = useState([])
+  const [positions, setPositions] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('current')
+  const [showManual, setShowManual] = useState(false)
+  const [editEntry, setEditEntry] = useState(null)
+  const [manualForm, setManualForm] = useState({ position_id: '', spiritual_year: '', term_number: 1, commissioned_at: '', is_current: false, notes: '', user_name: '' })
+  const [saving, setSaving] = useState(false)
 
   // Filters for history
   const [searchName, setSearchName] = useState('')
@@ -14,9 +22,7 @@ export default function Leadership() {
   const [filterPosition, setFilterPosition] = useState('')
 
   useEffect(() => {
-    Promise.all([
-      api.get('/leadership/current').catch(() => ({ data: { ec: [] } })),
-      api.get('/leadership/history').catch(() => ({ data: { history: [] } })),
+    
     ]).then(([curRes, histRes]) => {
       setCurrent(curRes.data.ec || [])
       setHistory(histRes.data.history || [])
@@ -31,7 +37,38 @@ export default function Leadership() {
 
   // Derive filter options from history
   const spiritualYears = [...new Set(history.map(a => a.spiritual_year).filter(Boolean))].sort().reverse()
-  const positions = [...new Set(history.map(a => a.position?.title).filter(Boolean))].sort()
+  const positionTitles = [...new Set(history.map(a => a.position?.title).filter(Boolean))].sort()
+
+  const saveManualEntry = async () => {
+    if (!manualForm.position_id || !manualForm.spiritual_year) return toast.error('Position and spiritual year are required')
+    setSaving(true)
+    try {
+      if (editEntry) {
+        await api.put(`/leadership/${editEntry.id}`, manualForm)
+        toast.success('Entry updated')
+      } else {
+        await api.post('/leadership/manual', manualForm)
+        toast.success('Leadership entry added')
+      }
+      const [curRes, histRes] = await Promise.all([api.get('/leadership/current'), api.get('/leadership/history')])
+      setCurrent(curRes.data.ec || [])
+      setHistory(histRes.data.history || [])
+      setShowManual(false)
+      setEditEntry(null)
+      setManualForm({ position_id: '', spiritual_year: '', term_number: 1, commissioned_at: '', is_current: false, notes: '', user_name: '' })
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
+    finally { setSaving(false) }
+  }
+
+  const deleteEntry = async (id) => {
+    if (!window.confirm('Delete this leadership entry?')) return
+    try {
+      await api.delete(`/leadership/${id}`)
+      setHistory(prev => prev.filter(a => a.id !== id))
+      setCurrent(prev => prev.filter(a => a.id !== id))
+      toast.success('Entry deleted')
+    } catch { toast.error('Failed') }
+  }
 
   // Apply filters
   const filteredHistory = history.filter(appt => {
@@ -40,6 +77,8 @@ export default function Leadership() {
     const matchPos  = !filterPosition || appt.position?.title === filterPosition
     return matchName && matchYear && matchPos
   })
+
+  const adminCanEdit = isAdmin && isAdmin()
 
   // Group history by spiritual year
   const groupedHistory = {}
@@ -61,6 +100,11 @@ export default function Leadership() {
           <h1 className="page-title">Leadership History</h1>
           <p className="page-subtitle">MUTCU Executive Council — past and present</p>
         </div>
+        {adminCanEdit && (
+          <button onClick={() => { setShowManual(true); setEditEntry(null) }} className="btn-primary btn-sm">
+            <Plus size={14} />Add Entry
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -132,9 +176,7 @@ export default function Leadership() {
                 <option value="">All Years</option>
                 {spiritualYears.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-              <select className="form-select text-sm w-52" value={filterPosition} onChange={e => setFilterPosition(e.target.value)}>
-                <option value="">All Positions</option>
-                {positions.map(p => <option key={p} value={p}>{p}</option>)}
+              
               </select>
               {(searchName || filterYear || filterPosition) && (
                 <button onClick={() => { setSearchName(''); setFilterYear(''); setFilterPosition('') }}
@@ -175,6 +217,12 @@ export default function Leadership() {
                               <div className="text-gray-400 text-xs">{appt.user?.primary_ministry || 'General'}</div>
                             </div>
                             <span className="badge badge-teal flex-shrink-0">T{appt.term_number}</span>
+                            {adminCanEdit && (
+                              <div className="flex gap-1 flex-shrink-0">
+                                <button onClick={() => { setEditEntry(appt); setManualForm({ position_id: appt.position_id, spiritual_year: appt.spiritual_year || '', term_number: appt.term_number || 1, commissioned_at: appt.commissioned_at?.split('T')[0] || '', is_current: appt.is_current || false, notes: appt.notes || '' }); setShowManual(true) }} className="text-gray-300 hover:text-navy transition-colors p-0.5"><Edit2 size={11} /></button>
+                                <button onClick={() => deleteEntry(appt.id)} className="text-gray-300 hover:text-red transition-colors p-0.5"><Trash2 size={11} /></button>
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -183,6 +231,58 @@ export default function Leadership() {
               ))}
             </div>
           )}
+        </div>
+      )}
+    {/* Manual Entry Modal */}
+      {showManual && adminCanEdit && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="card p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-montserrat font-bold text-navy">{editEntry ? 'Edit Leadership Entry' : 'Add Leadership Entry'}</h3>
+              <button onClick={() => { setShowManual(false); setEditEntry(null) }} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="form-label">Position *</label>
+                <select className="form-select" value={manualForm.position_id} onChange={e => setManualForm(f => ({ ...f, position_id: e.target.value }))}>
+                  <option value="">Select position...</option>
+                  {positions.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Member Name (if not in system)</label>
+                <input type="text" className="form-input" placeholder="e.g. John Doe (Historical)" value={manualForm.user_name} onChange={e => setManualForm(f => ({ ...f, user_name: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Spiritual Year *</label>
+                  <input type="text" className="form-input" placeholder="e.g. 2024/2025" value={manualForm.spiritual_year} onChange={e => setManualForm(f => ({ ...f, spiritual_year: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="form-label">Term Number</label>
+                  <input type="number" className="form-input" min="1" max="2" value={manualForm.term_number} onChange={e => setManualForm(f => ({ ...f, term_number: parseInt(e.target.value) }))} />
+                </div>
+              </div>
+              <div>
+                <label className="form-label">Commissioned Date</label>
+                <input type="date" className="form-input" value={manualForm.commissioned_at} onChange={e => setManualForm(f => ({ ...f, commissioned_at: e.target.value }))} />
+              </div>
+              <div>
+                <label className="form-label">Notes</label>
+                <input type="text" className="form-input" placeholder="Optional notes" value={manualForm.notes} onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="accent-orange" checked={manualForm.is_current} onChange={e => setManualForm(f => ({ ...f, is_current: e.target.checked }))} />
+                <span className="text-sm text-gray-700">Mark as current EC member</span>
+              </label>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={saveManualEntry} disabled={saving} className="btn-primary flex-1 justify-center">
+                <Check size={15} />{saving ? 'Saving...' : (editEntry ? 'Update Entry' : 'Add Entry')}
+              </button>
+              <button onClick={() => { setShowManual(false); setEditEntry(null) }} className="btn-outline flex-1 justify-center">Cancel</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

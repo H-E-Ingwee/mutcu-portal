@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Mail, MailOpen, Send, Reply } from 'lucide-react'
+import { Mail, MailOpen, Send, Reply, Trash2 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 export default function AdminMessages() {
@@ -26,6 +26,16 @@ export default function AdminMessages() {
     setSelected(msg)
     setReplyText('')
     if (msg.status==='unread') markRead(msg.id)
+  }
+
+  const deleteMessage = async (id) => {
+    if (!window.confirm('Delete this message?')) return
+    try {
+      await api.delete(`/messages/${id}`)
+      setMessages(prev => prev.filter(m => m.id !== id))
+      if (selected?.id === id) setSelected(null)
+      toast.success('Message deleted')
+    } catch { toast.error('Failed to delete') }
   }
 
   const sendReply = async () => {
@@ -93,7 +103,9 @@ export default function AdminMessages() {
                   {msg.status==='unread'
                     ? <Mail size={14} className="text-orange flex-shrink-0 mt-1" />
                     : <MailOpen size={14} className="text-gray-300 flex-shrink-0 mt-1" />}
-                </div>
+                  <button onClick={e => { e.stopPropagation(); deleteMessage(msg.id) }} className="text-gray-200 hover:text-red transition-colors flex-shrink-0 mt-1 ml-1">
+                    <Trash2 size={12} />
+                  </button>
               )
             })}
           </div>

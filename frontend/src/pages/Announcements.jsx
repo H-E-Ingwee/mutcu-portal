@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import api from '../lib/api'
 import toast from 'react-hot-toast'
-import { Megaphone, Pin, Plus, Trash2, X } from 'lucide-react'
+import { Megaphone, Pin, Plus, Trash2, X, Edit2, Check } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 export default function Announcements() {
@@ -10,6 +10,7 @@ export default function Announcements() {
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ title: '', body: '', is_pinned: false })
   const [submitting, setSubmitting] = useState(false)
 
@@ -21,13 +22,26 @@ export default function Announcements() {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const { data } = await api.post('/announcements', form)
-      setAnnouncements(prev => [data.announcement, ...prev])
+      if (editingId) {
+        const { data } = await api.put(`/announcements/${editingId}`, form)
+        setAnnouncements(prev => prev.map(a => a.id === editingId ? data.announcement : a))
+        toast.success('Announcement updated!')
+      } else {
+        const { data } = await api.post('/announcements', form)
+        setAnnouncements(prev => [data.announcement, ...prev])
+        toast.success('Announcement posted!')
+      }
       setForm({ title: '', body: '', is_pinned: false })
       setShowForm(false)
-      toast.success('Announcement posted!')
+      setEditingId(null)
     } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
     finally { setSubmitting(false) }
+  }
+
+  const startEdit = (a) => {
+    setForm({ title: a.title, body: a.body, is_pinned: a.is_pinned })
+    setEditingId(a.id)
+    setShowForm(true)
   }
 
   const remove = async id => {
@@ -63,7 +77,8 @@ export default function Announcements() {
               <span className="text-sm text-gray-700">Pin this announcement</span>
             </label>
             <div className="flex gap-3">
-              <button type="submit" disabled={submitting} className="btn-primary">{submitting ? 'Posting...' : 'Post Announcement'}</button>
+              <button type="submit" disabled={submitting} className="btn-primary">{submitting ? (editingId ? 'Updating...' : 'Posting...') : (editingId ? 'Update Announcement' : 'Post Announcement')}</button>
+              {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ title: '', body: '', is_pinned: false }); setShowForm(false) }} className="btn-outline">Cancel Edit</button>}
               <button type="button" onClick={() => setShowForm(false)} className="btn-outline">Cancel</button>
             </div>
           </form>
@@ -94,6 +109,7 @@ export default function Announcements() {
                   <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">{a.body}</p>
                 </div>
                 {canPost && (
+                  <button onClick={() => startEdit(a)} className="text-gray-300 hover:text-navy transition-colors flex-shrink-0 p-1"><Edit2 size={14} /></button>
                   <button onClick={() => remove(a.id)} className="text-gray-300 hover:text-red transition-colors flex-shrink-0 p-1"><Trash2 size={14} /></button>
                 )}
               </div>
