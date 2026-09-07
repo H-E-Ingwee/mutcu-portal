@@ -4,6 +4,11 @@ const supabase = require('../lib/supabase');
 const { authenticate, requireRole } = require('../middleware/auth');
 
 const ADMIN = ['super_admin', 'ec_admin'];
+const CAN_MANAGE_CALENDAR = ['super_admin', 'ec_admin', 'cu_secretary', 'treasurer', '1st_vp', '2nd_vp',
+  'prayer_coordinator', 'music_coordinator', 'missions_coordinator', 'bible_study_coordinator',
+  'discipleship_coordinator', 'tech_media_coordinator', 'creative_arts_coordinator',
+  'music_secretary', 'creative_arts_secretary', 'technical_media_secretary', 'hospitality_secretary',
+  'prayer_secretary', 'missions_secretary', 'bible_study_secretary', 'discipleship_secretary', 'welfare_secretary'];
 
 // GET /api/calendar — get all published events (authenticated members)
 router.get('/', authenticate, async (req, res) => {
@@ -23,7 +28,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // GET /api/calendar/all — all events including unpublished (admin)
-router.get('/all', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.get('/all', authenticate, requireRole(...CAN_MANAGE_CALENDAR), async (req, res) => {
   try {
     const { year } = req.query;
     let query = supabase.from('spiritual_calendar').select('*').order('event_date', { ascending: true });
@@ -49,7 +54,7 @@ router.get('/years', authenticate, async (req, res) => {
 });
 
 // POST /api/calendar — create event (admin)
-router.post('/', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.post('/', authenticate, requireRole(...CAN_MANAGE_CALENDAR), async (req, res) => {
   try {
     const { spiritual_year, title, event_type, event_date, end_date, description, is_recurring, is_published } = req.body;
     if (!title || !event_date || !spiritual_year || !event_type) {
@@ -69,7 +74,7 @@ router.post('/', authenticate, requireRole(...ADMIN), async (req, res) => {
 });
 
 // PUT /api/calendar/:id — update event (admin)
-router.put('/:id', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.put('/:id', authenticate, requireRole(...CAN_MANAGE_CALENDAR), async (req, res) => {
   try {
     const { spiritual_year, title, event_type, event_date, end_date, description, is_recurring, is_published } = req.body;
     const updates = { updated_at: new Date().toISOString() };
@@ -89,7 +94,7 @@ router.put('/:id', authenticate, requireRole(...ADMIN), async (req, res) => {
 });
 
 // DELETE /api/calendar/:id — delete event (admin)
-router.delete('/:id', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.delete('/:id', authenticate, requireRole(...CAN_MANAGE_CALENDAR), async (req, res) => {
   try {
     await supabase.from('spiritual_calendar').delete().eq('id', req.params.id);
     res.json({ message: 'Event deleted' });

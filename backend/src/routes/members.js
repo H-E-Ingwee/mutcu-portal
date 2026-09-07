@@ -9,6 +9,7 @@ const { sendApprovalEmail, sendVerificationEmail, sendRejectionEmail } = require
 // GET /api/members — list all members (secretary+)
 // Ministry role to ministry name mapping
 const MINISTRY_ROLE_MAP = {
+  // Ministry Committee Secretaries
   music_secretary: 'Music Ministry',
   creative_arts_secretary: 'Creative Arts Ministry',
   technical_media_secretary: 'Technical & Media Ministry',
@@ -19,11 +20,32 @@ const MINISTRY_ROLE_MAP = {
   discipleship_secretary: 'Discipleship Ministry',
   welfare_secretary: 'Welfare Ministry',
   ministry_secretary: null, // generic - sees all
+  // EC Coordinators (also scoped to their ministry)
+  music_coordinator: 'Music Ministry',
+  creative_arts_coordinator: 'Creative Arts Ministry',
+  tech_media_coordinator: 'Technical & Media Ministry',
+  prayer_coordinator: 'Prayer Ministry',
+  missions_coordinator: 'Missions & Evangelism Ministry',
+  bible_study_coordinator: 'Bible Study & Training Ministry',
+  discipleship_coordinator: 'Discipleship Ministry',
+  // Interim coordinators
+  interim_music_coordinator: 'Music Ministry',
+  interim_creative_arts_coordinator: 'Creative Arts Ministry',
+  interim_tech_media_coordinator: 'Technical & Media Ministry',
+  interim_prayer_coordinator: 'Prayer Ministry',
+  interim_missions_coordinator: 'Missions & Evangelism Ministry',
+  interim_bible_study_coordinator: 'Bible Study & Training Ministry',
 };
 
 const ALL_SECRETARY_ROLES = ['super_admin','ec_admin','cu_secretary','ministry_secretary',
   'music_secretary','creative_arts_secretary','technical_media_secretary','hospitality_secretary',
-  'prayer_secretary','missions_secretary','bible_study_secretary','discipleship_secretary','welfare_secretary'];
+  'prayer_secretary','missions_secretary','bible_study_secretary','discipleship_secretary','welfare_secretary',
+  'music_coordinator','creative_arts_coordinator','tech_media_coordinator','prayer_coordinator',
+  'missions_coordinator','bible_study_coordinator','discipleship_coordinator',
+  'treasurer','vice_secretary','1st_vp','2nd_vp',
+  'interim_chair','interim_secretary','interim_treasurer',
+  'interim_music_coordinator','interim_creative_arts_coordinator','interim_tech_media_coordinator',
+  'interim_prayer_coordinator','interim_missions_coordinator','interim_bible_study_coordinator'];
 
 router.get('/', authenticate, requireRole(...ALL_SECRETARY_ROLES), async (req, res) => {
   try {

@@ -326,10 +326,29 @@ async function sendCycleAnnouncementEmail({ recipientEmails, cycleTitle, spiritu
     `
   )
 
+  // Use BCC to protect member email privacy — send one email per batch with all as BCC
   const BATCH = 50
   for (let i = 0; i < recipientEmails.length; i += BATCH) {
     const batch = recipientEmails.slice(i, i + BATCH)
-    await sendEmail({ to: batch.join(', '), subject: msg.subject, html })
+    // Send to a generic address, BCC all members to protect privacy
+    const payload = {
+      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      to: [{ email: FROM_EMAIL }], // send to self
+      bcc: batch.map(email => ({ email: email.trim() })),
+      replyTo: { email: REPLY_TO },
+      subject: msg.subject,
+      htmlContent: html,
+    }
+    if (!BREVO_API_KEY) { console.warn('[EMAIL SKIPPED] No BREVO_API_KEY'); continue }
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: { 'accept': 'application/json', 'api-key': BREVO_API_KEY, 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) { const err = await response.json(); console.error('[BULK EMAIL ERROR]', err.message) }
+      else console.log(`[BULK EMAIL SENT] BCC batch of ${batch.length} members`)
+    } catch (err) { console.error('[BULK EMAIL ERROR]', err.message) }
   }
 }
 
