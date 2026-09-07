@@ -170,4 +170,15 @@ router.put('/:id/read', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// DELETE /api/messages/:id — admin deletes a message
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    if (!['super_admin', 'ec_admin', 'cu_secretary'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+    await supabase.from('messages').delete().eq('id', req.params.id)
+    res.json({ message: 'Message deleted' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 module.exports = router
