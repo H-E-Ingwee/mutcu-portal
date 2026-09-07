@@ -109,8 +109,10 @@ export default function Announcements() {
                   <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">{a.body}</p>
                 </div>
                 {canPost && (
-                  <button onClick={() => startEdit(a)} className="text-gray-300 hover:text-navy transition-colors flex-shrink-0 p-1"><Edit2 size={14} /></button>
-                  <button onClick={() => remove(a.id)} className="text-gray-300 hover:text-red transition-colors flex-shrink-0 p-1"><Trash2 size={14} /></button>
+                  <>
+                    <button onClick={() => startEdit(a)} className="text-gray-300 hover:text-navy transition-colors flex-shrink-0 p-1"><Edit2 size={14} /></button>
+                    <button onClick={() => remove(a.id)} className="text-gray-300 hover:text-red transition-colors flex-shrink-0 p-1"><Trash2 size={14} /></button>
+                  </>
                 )}
               </div>
             </div>
