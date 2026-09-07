@@ -42,7 +42,7 @@ const ALL_SECRETARY_ROLES = ['super_admin','ec_admin','cu_secretary','ministry_s
   'prayer_secretary','missions_secretary','bible_study_secretary','discipleship_secretary','welfare_secretary',
   'music_coordinator','creative_arts_coordinator','tech_media_coordinator','prayer_coordinator',
   'missions_coordinator','bible_study_coordinator','discipleship_coordinator',
-  'treasurer','vice_secretary','1st_vp','2nd_vp',
+  'cu_treasurer','vice_secretary','1st_vp','2nd_vp',
   'interim_chair','interim_secretary','interim_treasurer',
   'interim_music_coordinator','interim_creative_arts_coordinator','interim_tech_media_coordinator',
   'interim_prayer_coordinator','interim_missions_coordinator','interim_bible_study_coordinator'];
