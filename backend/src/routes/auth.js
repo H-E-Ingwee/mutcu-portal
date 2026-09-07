@@ -8,11 +8,12 @@ const { signToken } = require('../lib/jwt')
 const { authenticate } = require('../middleware/auth')
 const { sendPasswordResetEmail, sendVerificationEmail, sendCycleAnnouncementEmail } = require('../lib/email')
 
-function calcGraduationYear(studentId) {
+function calcGraduationYear(studentId, courseType = 'degree') {
   if (!studentId) return null
   const prefix = studentId.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase()
   const match = studentId.match(/(\d{4})$/)
   const admissionYear = match ? parseInt(match[1]) : new Date().getFullYear()
+  if (courseType === 'diploma') return admissionYear + 3
   return admissionYear + (prefix === 'SE' ? 5 : 4)
 }
 
@@ -24,34 +25,7 @@ function sanitizeUser(user) {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, student_id, gender, year_of_study, primary_ministry, faith_declaration, phone } = req.body
-    if (!name || !email || !password || !gender || !year_of_study || !faith_declaration) {
-      return res.status(400).json({ error: 'All required fields must be provided' })
-    }
-
-    const { data: existing } = await supabase.from('users').select('id').eq('email', email).single()
-    if (existing) return res.status(400).json({ error: 'Email already registered' })
-
-    const hashedPassword = await bcrypt.hash(password, 10)
-    const schoolPrefix = student_id ? student_id.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase() : ''
-    const verificationToken = uuidv4()
-
-    const { data: user, error } = await supabase.from('users').insert({
-      name, email, password: hashedPassword, phone: phone || null,
-      student_id: student_id || null, school_prefix: schoolPrefix,
-      gender, year_of_study: parseInt(year_of_study),
-      graduation_year: calcGraduationYear(student_id),
-      primary_ministry: primary_ministry || null,
-      membership_type: 'full', membership_tier: 'general', role: 'full_member',
-      faith_declaration_signed: true, declaration_signed_at: new Date().toISOString(),
-      enrollment_status: 'pending', enrollment_year: new Date().getFullYear(),
-      membership_year: new Date().getFullYear(),
-      email_verified: false,
-      email_verification_token: verificationToken,
-      email_verification_sent_at: new Date().toISOString(),
-      is_active: true, profile_complete: false, disciplinary_status: 'clear',
-      must_change_password: false, is_temp_password: false,
-    }).select().single()
+    
 
     if (error) throw error
 

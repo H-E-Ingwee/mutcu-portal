@@ -5,10 +5,12 @@ const { authenticate, requireRole } = require('../middleware/auth')
 const { sendCycleAnnouncementEmail } = require('../lib/email')
 
 const ADMIN = ['super_admin','ec_admin']
+// CU Secretary has broad access (almost same as Chairperson) except nominations and role management
+const ADMIN_AND_SECRETARY = ['super_admin','ec_admin','cu_secretary']
 const CYCLE_STATUSES = ['setup','prayer_period','nominations_open','vetting','nominees_published','objection_period','pre_agm','commissioned']
 
 // GET /api/admin/dashboard
-router.get('/dashboard', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.get('/dashboard', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
   try {
     const [totalRes, activeRes, pendingRes, ministryRes, cycleRes, logsRes] = await Promise.all([
       supabase.from('users').select('*', { count: 'exact', head: true }),
@@ -81,7 +83,7 @@ router.post('/cycles/:id/set-status', authenticate, requireRole(...ADMIN), async
 })
 
 // GET /api/admin/audit-log
-router.get('/audit-log', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.get('/audit-log', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
   try {
     const { from, to, page=1, limit=50 } = req.query
     let query = supabase.from('audit_logs').select('*, actor:actor_id(name)', { count: 'exact' }).order('created_at',{ascending:false})
@@ -96,7 +98,7 @@ router.get('/audit-log', authenticate, requireRole(...ADMIN), async (req, res) =
 })
 
 // GET /api/admin/cycles
-router.get('/cycles', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.get('/cycles', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
   try {
     const { data, error } = await supabase.from('nomination_cycles').select('*').order('created_at',{ascending:false})
     if (error) throw error
@@ -143,7 +145,7 @@ router.post('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, r
       data = result.data; error = result.error
     }
     if (error) throw error
-    await supabase.from('users').update({ role: 'nc_member' }).eq('id', user_id)
+    await supabase.from('users').update({ role: nc_role === 'chairperson' ? 'nc_chair' : nc_role === 'secretary' ? 'nc_secretary' : 'nc_member' }).eq('id', user_id)
     res.json({ nc_member: data, message: 'NC member appointed' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -198,7 +200,7 @@ router.get('/roles', authenticate, requireRole('super_admin'), async (req, res) 
 router.put('/roles/:userId', authenticate, requireRole('super_admin'), async (req, res) => {
   try {
     const { role } = req.body
-    const validRoles = ['super_admin','ec_admin','cu_secretary','ministry_secretary','nc_member','full_member','special_member','associate_member']
+    const validRoles = ['super_admin','ec_admin','cu_secretary','ministry_secretary','music_secretary','creative_arts_secretary','technical_media_secretary','hospitality_secretary','prayer_secretary','missions_secretary','bible_study_secretary','discipleship_secretary','welfare_secretary','nc_member','nc_chair','nc_secretary','full_member','special_member','associate_member','interim_chair','interim_secretary','interim_treasurer']
     if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role' })
     const { data, error } = await supabase.from('users').update({ role }).eq('id', req.params.userId).select('id,name,email,role').single()
     if (error) throw error
@@ -207,7 +209,7 @@ router.put('/roles/:userId', authenticate, requireRole('super_admin'), async (re
 })
 
 // GET /api/admin/finalists
-router.get('/finalists', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.get('/finalists', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
   try {
     const { data } = await supabase.from('users')
       .select('id,name,email,student_id,mutcu_number,year_of_study,photo_url,gender')
@@ -262,7 +264,7 @@ router.get('/export/members', authenticate, requireRole('super_admin','ec_admin'
 })
 
 // GET /api/admin/settings (legacy — kept for backward compat)
-router.get('/settings', authenticate, requireRole(...ADMIN), async (req, res) => {
+router.get('/settings', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
   res.json({
     settings: {
       app_name: process.env.APP_NAME || 'MUTCU DMS',

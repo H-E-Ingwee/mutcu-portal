@@ -7,10 +7,34 @@ const { authenticate, requireRole } = require('../middleware/auth');
 const { sendApprovalEmail, sendVerificationEmail, sendRejectionEmail } = require('../lib/email');
 
 // GET /api/members — list all members (secretary+)
-router.get('/', authenticate, requireRole('super_admin','ec_admin','cu_secretary','ministry_secretary'), async (req, res) => {
+// Ministry role to ministry name mapping
+const MINISTRY_ROLE_MAP = {
+  music_secretary: 'Music Ministry',
+  creative_arts_secretary: 'Creative Arts Ministry',
+  technical_media_secretary: 'Technical & Media Ministry',
+  hospitality_secretary: 'Hospitality Ministry',
+  prayer_secretary: 'Prayer Ministry',
+  missions_secretary: 'Missions & Evangelism Ministry',
+  bible_study_secretary: 'Bible Study & Training Ministry',
+  discipleship_secretary: 'Discipleship Ministry',
+  welfare_secretary: 'Welfare Ministry',
+  ministry_secretary: null, // generic - sees all
+};
+
+const ALL_SECRETARY_ROLES = ['super_admin','ec_admin','cu_secretary','ministry_secretary',
+  'music_secretary','creative_arts_secretary','technical_media_secretary','hospitality_secretary',
+  'prayer_secretary','missions_secretary','bible_study_secretary','discipleship_secretary','welfare_secretary'];
+
+router.get('/', authenticate, requireRole(...ALL_SECRETARY_ROLES), async (req, res) => {
   try {
     const { search, ministry, year, type, status, page = 1, limit = 30 } = req.query;
     let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+
+    // Ministry secretaries only see members of their ministry
+    const ministryForRole = MINISTRY_ROLE_MAP[req.user.role];
+    if (ministryForRole) {
+      query = query.or();
+    }
 
     if (search) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,mutcu_number.ilike.%${search}%,student_id.ilike.%${search}%`);
     if (ministry) query = query.eq('primary_ministry', ministry);
