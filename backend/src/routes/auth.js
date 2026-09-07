@@ -6,7 +6,7 @@ const router = express.Router()
 const supabase = require('../lib/supabase')
 const { signToken } = require('../lib/jwt')
 const { authenticate } = require('../middleware/auth')
-const { sendPasswordResetEmail, sendVerificationEmail, sendCycleAnnouncementEmail } = require('../lib/email')
+const { sendPasswordResetEmail, sendVerificationEmail } = require('../lib/email')
 
 function calcGraduationYear(studentId, courseType = 'degree') {
   if (!studentId) return null
@@ -14,6 +14,7 @@ function calcGraduationYear(studentId, courseType = 'degree') {
   const match = studentId.match(/(\d{4})$/)
   const admissionYear = match ? parseInt(match[1]) : new Date().getFullYear()
   if (courseType === 'diploma') return admissionYear + 3
+  // All degree students: 4 years (SE Engineering: 5 years)
   return admissionYear + (prefix === 'SE' ? 5 : 4)
 }
 
@@ -25,9 +26,77 @@ function sanitizeUser(user) {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    
+    const {
+      name, email, password, student_id, gender, year_of_study,
+      primary_ministry, secondary_ministry, faith_declaration, phone,
+      course_type,
+    } = req.body
 
-    if (error) throw error
+    // Required fields validation
+    if (!name || !email || !password || !gender || !year_of_study || !faith_declaration || !phone || !student_id) {
+      return res.status(400).json({ error: 'All required fields must be provided including phone number and student registration number' })
+    }
+
+    const validCourseType = ['degree', 'diploma'].includes(course_type) ? course_type : 'degree'
+
+    // Year of study validation — max 5 for all (we don't restrict by school prefix at registration)
+    const maxYear = validCourseType === 'diploma' ? 3 : 5
+    if (parseInt(year_of_study) > maxYear) {
+      return res.status(400).json({ error: `Maximum year of study for ${validCourseType} is Year ${maxYear}` })
+    }
+
+    // Check duplicate email
+    const { data: existing } = await supabase.from('users').select('id').eq('email', email).single()
+    if (existing) return res.status(400).json({ error: 'Email already registered' })
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const schoolPrefix = student_id ? student_id.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase() : ''
+    const verificationToken = uuidv4()
+
+    // Build insert object — only include new columns if schema_v5 has been run
+    const insertData = {
+      name, email, password: hashedPassword, phone,
+      student_id, school_prefix: schoolPrefix,
+      gender, year_of_study: parseInt(year_of_study),
+      graduation_year: calcGraduationYear(student_id, validCourseType),
+      primary_ministry: primary_ministry || null,
+      membership_type: 'full', membership_tier: 'general', role: 'full_member',
+      faith_declaration_signed: true, declaration_signed_at: new Date().toISOString(),
+      enrollment_status: 'pending', enrollment_year: new Date().getFullYear(),
+      membership_year: new Date().getFullYear(),
+      email_verified: false,
+      email_verification_token: verificationToken,
+      email_verification_sent_at: new Date().toISOString(),
+      is_active: true, profile_complete: false, disciplinary_status: 'clear',
+      must_change_password: false, is_temp_password: false,
+    }
+
+    // Try to add new columns — gracefully skip if schema_v5 not yet run
+    try {
+      // Test if course_type column exists by checking schema
+      insertData.course_type = validCourseType
+    } catch {}
+
+    try {
+      if (secondary_ministry) insertData.secondary_ministry = secondary_ministry
+    } catch {}
+
+    const { data: user, error } = await supabase.from('users').insert(insertData).select().single()
+
+    if (error) {
+      // If error is about unknown column (schema_v5 not run), retry without new columns
+      if (error.message && (error.message.includes('course_type') || error.message.includes('secondary_ministry') || error.message.includes('pending_changes'))) {
+        delete insertData.course_type
+        delete insertData.secondary_ministry
+        delete insertData.pending_changes
+        const { data: user2, error: error2 } = await supabase.from('users').insert(insertData).select().single()
+        if (error2) throw error2
+        sendVerificationEmail(user2, verificationToken).catch(err => console.error('[VERIFICATION EMAIL ERROR]', err.message))
+        const token = signToken({ id: user2.id, role: user2.role })
+        return res.status(201).json({ token, user: sanitizeUser(user2), message: 'Registration successful! Please check your email to verify your account.' })
+      }
+      throw error
+    }
 
     // Send verification email (fire and forget)
     sendVerificationEmail(user, verificationToken).catch(err =>
@@ -88,14 +157,17 @@ router.get('/me', authenticate, async (req, res) => {
 })
 
 // POST /api/auth/login-unverified — get token for unverified user (resend verification only)
+// Security: requires password verification
 router.post('/login-unverified', async (req, res) => {
   try {
-    const { email } = req.body
-    if (!email) return res.status(400).json({ error: 'Email required' })
+    const { email, password } = req.body
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     if (!user) return res.status(404).json({ error: 'User not found' })
     if (user.email_verified) return res.status(400).json({ error: 'Email already verified' })
-    // Issue short-lived token (1 hour) for resend only
+    // Verify password for security
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return res.status(401).json({ error: 'Incorrect password' })
     const token = signToken({ id: user.id, role: user.role })
     res.json({ token })
   } catch (err) {
@@ -108,16 +180,10 @@ router.post('/verify-email', async (req, res) => {
   try {
     const { token, id } = req.body
     if (!token || !id) return res.status(400).json({ error: 'Invalid verification link' })
-
     const { data: user } = await supabase.from('users').select('*').eq('id', id).eq('email_verification_token', token).single()
     if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' })
     if (user.email_verified) return res.json({ message: 'Email already verified. You can log in.' })
-
-    await supabase.from('users').update({
-      email_verified: true,
-      email_verification_token: null,
-    }).eq('id', id)
-
+    await supabase.from('users').update({ email_verified: true, email_verification_token: null }).eq('id', id)
     res.json({ message: 'Email verified successfully! You can now log in.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -129,18 +195,9 @@ router.post('/resend-verification', authenticate, async (req, res) => {
   try {
     const user = req.user
     if (user.email_verified) return res.json({ message: 'Your email is already verified.' })
-
     const token = uuidv4()
-    await supabase.from('users').update({
-      email_verification_token: token,
-      email_verification_sent_at: new Date().toISOString(),
-    }).eq('id', user.id)
-
-    // Fire and forget
-    sendVerificationEmail(user, token).catch(err =>
-      console.error('[RESEND VERIFICATION ERROR]', err.message)
-    )
-
+    await supabase.from('users').update({ email_verification_token: token, email_verification_sent_at: new Date().toISOString() }).eq('id', user.id)
+    sendVerificationEmail(user, token).catch(err => console.error('[RESEND VERIFICATION ERROR]', err.message))
     res.json({ message: 'Verification email resent! Please check your inbox.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -152,25 +209,13 @@ router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body
     if (!email) return res.status(400).json({ error: 'Email is required' })
-
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
-
-    // Always respond the same — don't reveal if email exists
     res.json({ message: 'If this email exists, a reset link has been sent to your inbox.' })
-
     if (!user) return
-
     const token = uuidv4()
-    const expires = new Date(Date.now() + 3600000).toISOString() // 1 hour
-    await supabase.from('users').update({
-      password_reset_token: token,
-      password_reset_expires: expires,
-    }).eq('id', user.id)
-
-    // Fire and forget
-    sendPasswordResetEmail(user, token).catch(err =>
-      console.error('[PASSWORD RESET EMAIL ERROR]', err.message)
-    )
+    const expires = new Date(Date.now() + 3600000).toISOString()
+    await supabase.from('users').update({ password_reset_token: token, password_reset_expires: expires }).eq('id', user.id)
+    sendPasswordResetEmail(user, token).catch(err => console.error('[PASSWORD RESET EMAIL ERROR]', err.message))
   } catch (err) {
     console.error('Forgot password error:', err.message)
     res.status(500).json({ error: 'Failed to process request.' })
@@ -182,21 +227,13 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { token, password } = req.body
     if (!token || !password) return res.status(400).json({ error: 'Token and password required' })
-
     const { data: user } = await supabase.from('users').select('*').eq('password_reset_token', token).single()
     if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' })
     if (new Date(user.password_reset_expires) < new Date()) {
       return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' })
     }
-
     const hashed = await bcrypt.hash(password, 10)
-    await supabase.from('users').update({
-      password: hashed,
-      password_reset_token: null,
-      password_reset_expires: null,
-      must_change_password: false,
-    }).eq('id', user.id)
-
+    await supabase.from('users').update({ password: hashed, password_reset_token: null, password_reset_expires: null, must_change_password: false }).eq('id', user.id)
     res.json({ message: 'Password reset successfully. You can now log in.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -211,11 +248,7 @@ router.post('/change-password', authenticate, async (req, res) => {
     const valid = await bcrypt.compare(current_password, user.password)
     if (!valid) return res.status(400).json({ error: 'Current password is incorrect' })
     const hashed = await bcrypt.hash(password, 10)
-    await supabase.from('users').update({
-      password: hashed,
-      must_change_password: false,
-      is_temp_password: false,
-    }).eq('id', req.user.id)
+    await supabase.from('users').update({ password: hashed, must_change_password: false, is_temp_password: false }).eq('id', req.user.id)
     res.json({ message: 'Password changed successfully' })
   } catch (err) {
     res.status(500).json({ error: err.message })
