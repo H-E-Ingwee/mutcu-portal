@@ -106,6 +106,7 @@ export default function AdminMessages() {
                   <button onClick={e => { e.stopPropagation(); deleteMessage(msg.id) }} className="text-gray-200 hover:text-red transition-colors flex-shrink-0 mt-1 ml-1">
                     <Trash2 size={12} />
                   </button>
+                </div>
               )
             })}
           </div>
