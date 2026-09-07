@@ -22,7 +22,10 @@ export default function Leadership() {
   const [filterPosition, setFilterPosition] = useState('')
 
   useEffect(() => {
-    
+    api.get('/positions').then(r => setPositions(r.data.positions || [])).catch(() => {})
+    Promise.all([
+      api.get('/leadership/current').catch(() => ({ data: { ec: [] } })),
+      api.get('/leadership/history').catch(() => ({ data: { history: [] } })),
     ]).then(([curRes, histRes]) => {
       setCurrent(curRes.data.ec || [])
       setHistory(histRes.data.history || [])
