@@ -35,6 +35,7 @@ import MembersPending from './pages/secretary/MembersPending'
 import MemberCreate from './pages/secretary/MemberCreate'
 import MemberEdit from './pages/secretary/MemberEdit'
 import MembersImport from './pages/secretary/MembersImport'
+import MinistryMembers from './pages/secretary/MinistryMembers'
 
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminCycles from './pages/admin/AdminCycles'
@@ -124,6 +125,9 @@ function AppRoutes() {
         <Route path="nc/position/:positionId" element={<ProtectedRoute roles={NC_ROLES}><NCPosition /></ProtectedRoute>} />
         <Route path="nc/objections" element={<ProtectedRoute roles={NC_ROLES}><NCObjections /></ProtectedRoute>} />
         <Route path="nc/suggestions" element={<ProtectedRoute roles={NC_ROLES}><NCSuggestions /></ProtectedRoute>} />
+
+        {/* Ministry Members — for ministry secretaries and EC coordinators */}
+        <Route path="secretary/ministry-members" element={<ProtectedRoute roles={[...ALL_SECRETARY_ROLES, 'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','1st_vp','2nd_vp','treasurer','vice_secretary']}><MinistryMembers /></ProtectedRoute>} />
 
         {/* Secretary — all secretary roles */}
         <Route path="secretary/members" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, ...ALL_SECRETARY_ROLES]}><MembersList /></ProtectedRoute>} />

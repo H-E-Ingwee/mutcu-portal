@@ -4,17 +4,30 @@ import toast from 'react-hot-toast'
 import { Shield } from 'lucide-react'
 
 const ROLE_GROUPS = [
-  { group: 'Executive Council', roles: [
+  { group: 'Executive Council — Core', roles: [
     { value: 'super_admin', label: 'Super Admin (System)' },
-    { value: 'ec_admin', label: 'EC Admin — Chairperson of Union' },
+    { value: 'ec_admin', label: 'Chairperson of the Union' },
     { value: 'cu_secretary', label: 'CU Secretary' },
+    { value: 'vice_secretary', label: 'Vice Secretary' },
+    { value: 'treasurer', label: 'CU Treasurer' },
+    { value: '1st_vp', label: '1st Vice Chairperson (Female)' },
+    { value: '2nd_vp', label: '2nd Vice Chairperson (Male)' },
+  ]},
+  { group: 'Executive Council — Ministry Coordinators', roles: [
+    { value: 'prayer_coordinator', label: 'Prayer Coordinator (EC)' },
+    { value: 'music_coordinator', label: 'Music Coordinator (EC)' },
+    { value: 'missions_coordinator', label: 'Missions & Evangelism Coordinator (EC)' },
+    { value: 'bible_study_coordinator', label: 'Bible Study & Training Coordinator (EC)' },
+    { value: 'discipleship_coordinator', label: 'Discipleship Coordinator (EC)' },
+    { value: 'tech_media_coordinator', label: 'Technical & Media Coordinator (EC)' },
+    { value: 'creative_arts_coordinator', label: 'Creative Arts Coordinator (EC)' },
   ]},
   { group: 'Nomination College', roles: [
     { value: 'nc_chair', label: 'NC Chairperson' },
     { value: 'nc_secretary', label: 'NC Secretary' },
     { value: 'nc_member', label: 'NC Member' },
   ]},
-  { group: 'Ministry Secretaries', roles: [
+  { group: 'Ministry Committee Secretaries', roles: [
     { value: 'music_secretary', label: 'Music Ministry Secretary' },
     { value: 'creative_arts_secretary', label: 'Creative Arts Ministry Secretary' },
     { value: 'technical_media_secretary', label: 'Technical & Media Ministry Secretary' },
@@ -29,6 +42,12 @@ const ROLE_GROUPS = [
     { value: 'interim_chair', label: 'Interim Chairperson' },
     { value: 'interim_secretary', label: 'Interim Secretary' },
     { value: 'interim_treasurer', label: 'Interim Treasurer' },
+    { value: 'interim_prayer_coordinator', label: 'Interim Prayer Coordinator' },
+    { value: 'interim_music_coordinator', label: 'Interim Music Coordinator' },
+    { value: 'interim_missions_coordinator', label: 'Interim Missions Coordinator' },
+    { value: 'interim_bible_study_coordinator', label: 'Interim Bible Study Coordinator' },
+    { value: 'interim_tech_media_coordinator', label: 'Interim Tech & Media Coordinator' },
+    { value: 'interim_creative_arts_coordinator', label: 'Interim Creative Arts Coordinator' },
   ]},
   { group: 'General Members', roles: [
     { value: 'full_member', label: 'Full Member' },

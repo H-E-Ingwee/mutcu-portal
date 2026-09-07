@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState, useEffect } from 'react'
 import api from '../lib/api'
@@ -6,19 +6,45 @@ import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
   MessageSquare, ClipboardList, Megaphone, History, Send, X,
-  CalendarDays, ShieldAlert, DollarSign, Church
+  CalendarDays, ShieldAlert, DollarSign, Church, Lock, Clock
 } from 'lucide-react'
 
+// Pending member locked page component
+function PendingLock() {
+  return (
+    <div className="flex items-center justify-center h-full min-h-64">
+      <div className="text-center max-w-sm">
+        <div className="w-16 h-16 bg-orange/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Lock size={28} className="text-orange" />
+        </div>
+        <h3 className="font-montserrat font-bold text-navy text-lg mb-2">Membership Pending</h3>
+        <p className="text-gray-500 text-sm leading-relaxed">
+          This feature is available after your membership is approved by the CU Secretary.
+          You will receive an email notification once approved.
+        </p>
+        <div className="flex items-center justify-center gap-2 mt-4 text-orange text-xs font-semibold">
+          <Clock size={14} />
+          <span>Awaiting Secretary Approval</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Layout() {
-  const { user, logout, isAdmin, isSecretary, isNC } = useAuth()
+  const { user, logout, isAdmin, isSecretary, isTreasurer, isNC, isECCoordinator, isMinistrySecretary, canManageRequisitions, getMyMinistry } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState([])
 
+  const isPending = user?.enrollment_status === 'pending'
+  const myMinistry = getMyMinistry ? getMyMinistry() : null
+
   const photoUrl = user?.photo_url ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name||'M')}&background=04003D&color=FF9700&size=200&bold=true`
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
 
   useEffect(() => {
     fetchUnreadCount()
@@ -68,6 +94,10 @@ export default function Layout() {
     </NavLink>
   )
 
+  // Check if current page should be locked for pending members
+  const allowedPendingPaths = ['/dashboard', '/profile/edit', '/contact', '/verify-email']
+  const isLockedForPending = isPending && !allowedPendingPaths.some(p => location.pathname.startsWith(p))
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
@@ -77,7 +107,7 @@ export default function Layout() {
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden p-0.5">
               <img src="/mutcu-icon.png" alt="MUTCU" className="w-full h-full object-contain"
-                onError={e => { e.target.style.display='none'; e.target.parentElement.innerHTML='<span class="text-navy font-bold text-sm font-montserrat">M</span>' }} />
+                onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<span class="text-navy font-bold text-sm font-montserrat">M</span>' }} />
             </div>
             <div>
               <div className="font-montserrat font-bold text-white text-sm">MUTCU DMS</div>
@@ -89,45 +119,97 @@ export default function Layout() {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
           <NavItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-          <NavItem to="/announcements" icon={Megaphone} label="Announcements" />
-          <NavItem to="/nominations" icon={FileText} label="Nominations" />
-          <NavItem to="/nominations/nominees" icon={Award} label="Nominees" />
-          <NavItem to="/member-card" icon={UserCircle} label="Member Card" />
-          <NavItem to="/leadership" icon={History} label="Leadership History" />
-          <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
-          <NavItem to="/constitution" icon={BookOpen} label="Constitution" />
-          <NavItem to="/contact" icon={Send} label="Contact Admin" />
 
-          {isNC && isNC() && (
+          {/* Pending members only see limited nav */}
+          {isPending ? (
             <>
-              <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Nomination College</div>
-              <NavItem to="/nc" icon={ClipboardList} label="NC Dashboard" />
-              <NavItem to="/nc/objections" icon={MessageSquare} label="Objections" />
-              <NavItem to="/nc/suggestions" icon={Mic2} label="Suggestions" />
+              <NavItem to="/contact" icon={Send} label="Contact Admin" />
+              <NavItem to="/profile/edit" icon={UserCircle} label="My Profile" />
+              <div className="px-4 pt-4 pb-1">
+                <div className="bg-orange/10 border border-orange/20 rounded-lg p-2 text-xs text-orange text-center">
+                  <Clock size={12} className="inline mr-1" />
+                  More features after approval
+                </div>
+              </div>
             </>
-          )}
-
-          {isSecretary && isSecretary() && (
+          ) : (
             <>
-              <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Secretary</div>
-              <NavItem to="/secretary/members" icon={Users} label="Member Register" />
-              <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" />
-              <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
-            </>
-          )}
+              <NavItem to="/announcements" icon={Megaphone} label="Announcements" />
+              <NavItem to="/nominations" icon={FileText} label="Nominations" />
+              <NavItem to="/nominations/nominees" icon={Award} label="Nominees" />
+              <NavItem to="/member-card" icon={UserCircle} label="Member Card" />
+              <NavItem to="/leadership" icon={History} label="Leadership History" />
+              <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
+              <NavItem to="/constitution" icon={BookOpen} label="Constitution" />
+              <NavItem to="/contact" icon={Send} label="Contact Admin" />
 
-          {isAdmin && isAdmin() && (
-            <>
-              <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Administration</div>
-              <NavItem to="/admin" icon={Settings} label="Admin Dashboard" />
-              <NavItem to="/admin/cycles" icon={BookOpen} label="Nomination Cycles" />
-              <NavItem to="/admin/positions" icon={Award} label="EC Positions" />
-              <NavItem to="/admin/messages" icon={MessageSquare} label="Messages" />
-              <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
-              <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
-              <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
-              <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
-              <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
+              {/* NC Panel */}
+              {isNC && isNC() && (
+                <>
+                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Nomination College</div>
+                  <NavItem to="/nc" icon={ClipboardList} label="NC Dashboard" />
+                  <NavItem to="/nc/objections" icon={MessageSquare} label="Objections" />
+                  <NavItem to="/nc/suggestions" icon={Mic2} label="Suggestions" />
+                </>
+              )}
+
+              {/* Ministry Secretary */}
+              {(isMinistrySecretary && isMinistrySecretary()) && (
+                <>
+                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">
+                    {myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'}
+                  </div>
+                  <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                </>
+              )}
+
+              {/* EC Coordinators */}
+              {(isECCoordinator && isECCoordinator()) && (
+                <>
+                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">
+                    {myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'}
+                  </div>
+                  <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                </>
+              )}
+
+              {/* Secretary */}
+              {isSecretary && isSecretary() && (
+                <>
+                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Secretary</div>
+                  <NavItem to="/secretary/members" icon={Users} label="Member Register" />
+                  <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" />
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                </>
+              )}
+
+              {/* Treasurer */}
+              {isTreasurer && isTreasurer() && !isSecretary() && (
+                <>
+                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Treasurer</div>
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                </>
+              )}
+
+              {/* Admin */}
+              {isAdmin && isAdmin() && (
+                <>
+                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Administration</div>
+                  <NavItem to="/admin" icon={Settings} label="Admin Dashboard" />
+                  <NavItem to="/admin/cycles" icon={BookOpen} label="Nomination Cycles" />
+                  <NavItem to="/admin/positions" icon={Award} label="EC Positions" />
+                  <NavItem to="/admin/messages" icon={MessageSquare} label="Messages" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
+                  <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
+                  <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
+                  <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
+                  <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
+                </>
+              )}
+
+              <NavItem to="/profile/edit" icon={UserCircle} label="My Profile" />
             </>
           )}
         </nav>
@@ -158,7 +240,7 @@ export default function Layout() {
             <button onClick={() => setSidebarOpen(true)} className="text-navy p-1 lg:hidden"><Menu size={20} /></button>
             <div className="flex items-center gap-2 lg:hidden">
               <img src="/mutcu-icon.png" alt="MUTCU" className="w-6 h-6 object-contain"
-                onError={e => e.target.style.display='none'} />
+                onError={e => e.target.style.display = 'none'} />
               <span className="font-montserrat font-bold text-navy text-sm">MUTCU DMS</span>
             </div>
           </div>
@@ -186,9 +268,11 @@ export default function Layout() {
                     {notifications.length === 0 ? (
                       <div className="text-center py-6 text-gray-400 text-sm">No notifications</div>
                     ) : notifications.map(n => (
-                      <div key={n.id} className={`px-4 py-3 border-b border-gray-50 hover:bg-gray-50 ${!n.read_at ? 'bg-orange/5' : ''}`}>
+                      <div key={n.id} className={`px-4 py-3 border-b border-gray-50 hover:bg-gray-50 cursor-pointer ${!n.read_at ? 'bg-orange/5' : ''}`}
+                        onClick={async () => { await api.post(`/notifications/${n.id}/read`).catch(() => {}); fetchUnreadCount() }}>
                         <div className="font-semibold text-navy text-xs">{n.title}</div>
                         <div className="text-gray-500 text-xs mt-0.5">{n.body}</div>
+                        {!n.read_at && <div className="w-2 h-2 bg-orange rounded-full mt-1" />}
                       </div>
                     ))}
                   </div>
@@ -203,9 +287,9 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Content */}
+        {/* Content — show lock for pending members on restricted pages */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Outlet />
+          {isLockedForPending ? <PendingLock /> : <Outlet />}
         </main>
       </div>
     </div>
