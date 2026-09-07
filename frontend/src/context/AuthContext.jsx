@@ -70,8 +70,8 @@ export function AuthProvider({ children }) {
   // Secretary — broad access (not nominations, not role management)
   const isSecretary = () => hasRole('super_admin', 'ec_admin', 'cu_secretary')
 
-  // Treasurer — financial access
-  const isTreasurer = () => hasRole('super_admin', 'ec_admin', 'cu_secretary', 'treasurer')
+  // CU Treasurer — dedicated financial role (separate from Secretary)
+  const isTreasurer = () => hasRole('super_admin', 'ec_admin', 'cu_treasurer')
 
   // NC roles — includes chair and secretary who can act
   const isNC = () => hasRole('super_admin', 'ec_admin', 'nc_chair', 'nc_secretary', 'nc_member')
@@ -87,9 +87,9 @@ export function AuthProvider({ children }) {
   const isLeadership = () => isSecretary() || isECCoordinator() || isMinistrySecretary() ||
     hasRole(...NC_ROLES, ...INTERIM_ROLES)
 
-  // Can manage requisitions (EC + secretaries + coordinators + treasurer)
+  // Can manage requisitions (EC + secretaries + coordinators + treasurer, NOT regular members)
   const canManageRequisitions = () => isSecretary() || isTreasurer() || isECCoordinator() ||
-    isMinistrySecretary() || hasRole(...INTERIM_ROLES)
+    isMinistrySecretary() || hasRole(...INTERIM_ROLES) || hasRole('cu_treasurer', '1st_vp', '2nd_vp', 'vice_secretary')
 
   // Approved member
   const isApproved = () => user?.enrollment_status === 'active'

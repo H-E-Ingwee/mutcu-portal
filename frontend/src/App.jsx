@@ -49,6 +49,7 @@ import AdminSettings from './pages/admin/AdminSettings'
 import AdminDisciplinary from './pages/admin/AdminDisciplinary'
 
 import Requisitions from './pages/treasurer/Requisitions'
+import TreasurerDashboard from './pages/treasurer/TreasurerDashboard'
 
 function Spinner() {
   return (
@@ -118,7 +119,8 @@ function AppRoutes() {
         <Route path="constitution" element={<Constitution />} />
         <Route path="nominations" element={<Nominations />} />
         <Route path="nominations/nominees" element={<Nominees />} />
-        <Route path="treasurer/requisitions" element={<Requisitions />} />
+        <Route path="treasurer" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary',...ALL_SECRETARY_ROLES,'1st_vp','2nd_vp','vice_secretary','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','interim_chair','interim_secretary','interim_treasurer']}><TreasurerDashboard /></ProtectedRoute>} />
+        <Route path="treasurer/requisitions" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary',...ALL_SECRETARY_ROLES,'1st_vp','2nd_vp','vice_secretary','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','interim_chair','interim_secretary','interim_treasurer']}><Requisitions /></ProtectedRoute>} />
 
         {/* NC Panel */}
         <Route path="nc" element={<ProtectedRoute roles={NC_ROLES}><NCDashboard /></ProtectedRoute>} />

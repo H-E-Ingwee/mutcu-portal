@@ -110,7 +110,7 @@ function PendingMemberSkeleton({ user }) {
 }
 
 export default function Dashboard() {
-  const { user, isAdmin, isSecretary, isNC } = useAuth()
+  const { user, isAdmin, isSecretary, isNC, canManageRequisitions } = useAuth()
   const [cycle, setCycle] = useState(null)
   const [stats, setStats] = useState({ total_members: 0, active_members: 0, pending_members: 0, ministry_count: 0 })
   const [currentEC, setCurrentEC] = useState([])
@@ -256,7 +256,7 @@ export default function Dashboard() {
                   { to: '/secretary/members', icon: Users, label: 'Members', color: 'bg-blue-100 text-blue-600', show: isSecretary && isSecretary() },
                   { to: '/admin', icon: Settings, label: 'Admin', color: 'bg-red/10 text-red', show: isAdmin && isAdmin() },
                   { to: '/analytics', icon: BarChart3, label: 'Analytics', color: 'bg-purple-100 text-purple-600', show: isAdmin && isAdmin() },
-                  { to: '/treasurer/requisitions', icon: FileText, label: 'Requisitions', color: 'bg-green-100 text-green-600', show: true },
+                  { to: '/treasurer/requisitions', icon: FileText, label: 'Requisitions', color: 'bg-green-100 text-green-600', show: canManageRequisitions && canManageRequisitions() },
                   { to: '/admin/disciplinary', icon: ShieldAlert, label: 'Disciplinary', color: 'bg-red/10 text-red', show: isAdmin && isAdmin() },
                   { to: '/profile/edit', icon: Users, label: 'My Profile', color: 'bg-gray-100 text-gray-600', show: true },
                 ].filter(a => a.show).map((action, i) => (
