@@ -197,20 +197,68 @@ router.get('/publish-summary', authenticate, requireRole('nc_chair', 'nc_secreta
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/nc/publish — NC Chair, EC Admin, Super Admin
-router.post('/publish', authenticate, requireRole('nc_chair', 'ec_admin', 'super_admin'), async (req, res) => {
+// POST /api/nc/publish — NC Chair, NC Secretary, EC Admin, Super Admin
+router.post('/publish', authenticate, requireRole('nc_chair', 'nc_secretary', 'ec_admin', 'super_admin'), async (req, res) => {
   try {
     const { cycle_id } = req.body;
-    const { data: approved } = await supabase.from('vetting_decisions').select('*').eq('cycle_id', cycle_id).eq('decision', 'approved');
-    for (const d of approved || []) {
-      await supabase.from('nominees').upsert({
-        cycle_id, position_id: d.position_id, candidate_id: d.candidate_id,
-        status: 'active', published_at: new Date().toISOString(), published_by: req.user.id,
-      }, { onConflict: 'cycle_id,position_id,candidate_id' });
+    if (!cycle_id) return res.status(400).json({ error: 'cycle_id is required' });
+
+    // Verify cycle exists and is in vetting stage
+    const { data: cycle } = await supabase.from('nomination_cycles').select('status,title').eq('id', cycle_id).single();
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+    if (!['vetting', 'nominees_published'].includes(cycle.status)) {
+      return res.status(400).json({ error: `Cannot publish from status: ${cycle.status}. Cycle must be in vetting stage.` });
     }
-    await supabase.from('nomination_cycles').update({ status: 'nominees_published' }).eq('id', cycle_id);
-    res.json({ message: 'Nominees published successfully' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+
+    // Get all approved vetting decisions
+    const { data: approved, error: fetchErr } = await supabase
+      .from('vetting_decisions').select('*').eq('cycle_id', cycle_id).eq('decision', 'approved');
+    if (fetchErr) throw fetchErr;
+
+    if (!approved || approved.length === 0) {
+      return res.status(400).json({ error: 'No approved candidates found. Please approve at least one candidate before publishing.' });
+    }
+
+    // Clear existing nominees for this cycle first (clean republish)
+    await supabase.from('nominees').delete().eq('cycle_id', cycle_id);
+
+    // Insert all approved candidates as nominees
+    const now = new Date().toISOString();
+    const nomineeRows = approved.map(d => ({
+      cycle_id,
+      position_id: d.position_id,
+      candidate_id: d.candidate_id,
+      status: 'active',
+      published_at: now,
+      published_by: req.user.id,
+    }));
+
+    const { error: insertErr } = await supabase.from('nominees').insert(nomineeRows);
+    if (insertErr) {
+      console.error('[PUBLISH ERROR] nominees insert:', insertErr);
+      throw insertErr;
+    }
+
+    // Advance cycle status to nominees_published
+    const { error: cycleErr } = await supabase.from('nomination_cycles')
+      .update({ status: 'nominees_published' }).eq('id', cycle_id);
+    if (cycleErr) throw cycleErr;
+
+    // Audit log
+    await supabase.from('audit_logs').insert({
+      actor_id: req.user.id,
+      action: 'nc.nominees_published',
+      entity_type: 'nomination_cycle',
+      entity_id: cycle_id,
+      description: `${approved.length} nominees published for cycle "${cycle.title}" by ${req.user.name}`,
+    }).then(() => {}).catch(() => {});
+
+    console.log(`[PUBLISH] ${approved.length} nominees published for cycle ${cycle_id} by ${req.user.name}`);
+    res.json({ message: `${approved.length} nominees published successfully`, count: approved.length });
+  } catch (err) {
+    console.error('[PUBLISH ERROR]', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/nc/objections

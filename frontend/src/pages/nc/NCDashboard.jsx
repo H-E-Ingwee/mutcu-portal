@@ -65,11 +65,11 @@ export default function NCDashboard() {
   const publish = async () => {
     setPublishing(true)
     try {
-      await api.post('/nc/publish', { cycle_id: data.cycle.id })
-      toast.success('Nominees published successfully! All members have been notified.')
+      const { data: res } = await api.post('/nc/publish', { cycle_id: data.cycle.id })
+      toast.success(res.message || 'Nominees published successfully! All members have been notified.')
       setData(prev => ({ ...prev, cycle: { ...prev.cycle, status: 'nominees_published' } }))
       setShowPublishModal(false)
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed to publish') }
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to publish nominees') }
     finally { setPublishing(false) }
   }
 
@@ -225,12 +225,7 @@ export default function NCDashboard() {
             <AlertTriangle size={14} />Objections
             {objectionCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{objectionCount}</span>}
           </Link>
-          {/* Publish — show during vetting stage */}
-          {(canAct || ['ec_admin', 'super_admin'].includes(user?.role)) && cycle.status === 'vetting' && (
-            <button onClick={openPublishModal} disabled={publishing} className="btn-primary btn-sm">
-              <Send size={14} />{publishing ? 'Publishing...' : 'Publish Nominees'}
-            </button>
-          )}
+          
           {/* Dissolve NC */}
           {(canAct || ['ec_admin', 'super_admin'].includes(user?.role)) && cycle.status === 'commissioned' && !cycle.nc_dissolution_date && (
             <button onClick={dissolveNC} disabled={dissolving} className="btn-outline btn-sm text-red border-red/30 hover:bg-red/5">
