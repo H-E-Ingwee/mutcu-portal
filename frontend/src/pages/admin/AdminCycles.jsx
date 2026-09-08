@@ -52,9 +52,8 @@ export default function AdminCycles() {
 
   return (
     <div>
-      
-
-      
+      {cycles.length === 0 ? (
+        <div className="card p-6 text-center text-gray-500">No cycles found.</div>
       ) : cycles.map(c => (
         <div key={c.id} className="card mb-4">
           <div className="card-body">
