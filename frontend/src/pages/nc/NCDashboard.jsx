@@ -103,7 +103,8 @@ export default function NCDashboard() {
             <AlertTriangle size={14} />Objections
             {objectionCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{objectionCount}</span>}
           </Link>
-          {canAct && cycle.status === 'vetting' && (
+          {/* Publish — NC Chair, Secretary, EC Admin, Super Admin when in vetting */}
+          {(canAct || ['ec_admin','super_admin'].includes(user?.role)) && cycle.status === 'vetting' && (
             <button onClick={publish} disabled={publishing} className="btn-primary btn-sm">
               <Send size={14} />{publishing ? 'Publishing...' : 'Publish Nominees'}
             </button>
@@ -121,8 +122,32 @@ export default function NCDashboard() {
         </div>
       </div>
 
+      {/* Status guide */}
+      {cycle.status === 'nominations_open' && (
+        <div className="card p-3 mb-4 bg-green-50 border border-green-200">
+          <div className="text-green-700 text-sm font-semibold">📋 Nominations are open — members are submitting recommendations. Wait for the EC Admin to advance to Vetting stage.</div>
+        </div>
+      )}
+      {cycle.status === 'vetting' && (
+        <div className="card p-3 mb-4 bg-orange/5 border border-orange/20">
+          <div className="text-orange text-sm">
+            <strong>🔍 Vetting Stage:</strong> Review each position below, approve/reject candidates, then click <strong>Publish Nominees</strong> above when done.
+          </div>
+        </div>
+      )}
+      {cycle.status === 'nominees_published' && (
+        <div className="card p-3 mb-4 bg-teal/5 border border-teal/20">
+          <div className="text-teal text-sm font-semibold">✅ Nominees published! Members can now view nominees. EC Admin will advance to Objection Period.</div>
+        </div>
+      )}
+      {cycle.status === 'objection_period' && (
+        <div className="card p-3 mb-4 bg-red/5 border border-red/20">
+          <div className="text-red text-sm font-semibold">⚖️ Objection Period — review and resolve any objections submitted by members.</div>
+        </div>
+      )}
+
       {/* Role notice for view-only members */}
-      {!canAct && (
+      {!canAct && !['ec_admin','super_admin'].includes(user?.role) && (
         <div className="card p-3 mb-4 bg-blue-50 border border-blue-200">
           <div className="flex items-center gap-2 text-blue-700 text-sm">
             <Eye size={16} />

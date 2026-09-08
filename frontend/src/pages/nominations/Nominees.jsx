@@ -30,18 +30,7 @@ export default function Nominees() {
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
 
-  if (!data.published) {
-    return (
-      <div className="max-w-lg mx-auto mt-12 text-center">
-        <div className="card p-8">
-          <Award size={40} className="text-gray-300 mx-auto mb-4" />
-          <h2 className="font-montserrat font-bold text-navy text-lg mb-2">Nominees Not Yet Published</h2>
-          <p className="text-gray-500 text-sm">{data.cycle ? `The Nomination College is vetting candidates for ${data.cycle.title}.` : 'No active nomination cycle.'}</p>
-          {data.cycle?.publication_date && <p className="text-gray-400 text-xs mt-2">Expected: {new Date(data.cycle.publication_date).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})}</p>}
-        </div>
-      </div>
-    )
-  }
+  
 
   // Group by position
   const byPosition = {}

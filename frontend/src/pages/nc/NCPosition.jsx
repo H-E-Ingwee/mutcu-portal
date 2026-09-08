@@ -269,12 +269,7 @@ export default function NCPosition() {
                       {decision.reason && <div className="font-normal mt-0.5 text-xs opacity-80">{decision.reason}</div>}
                     </div>
                   )}
-                  <VettingForm
-                    candidateId={candidate.id}
-                    currentDecision={decision}
-                    onSave={saveDecision}
-                    saving={saving[candidate.id]}
-                  />
+                  
                 </div>
               </div>
             </div>
@@ -324,9 +319,17 @@ export default function NCPosition() {
   )
 }
 
-function VettingForm({ candidateId, currentDecision, onSave, saving }) {
+function VettingForm({ candidateId, currentDecision, onSave, saving, canAct }) {
   const [decision, setDecision] = useState(currentDecision?.decision||'')
   const [reason, setReason] = useState(currentDecision?.reason||'')
+
+  if (!canAct) {
+    return (
+      <div className="text-xs text-gray-400 italic p-2 bg-gray-50 rounded-lg text-center">
+        View only — NC Chair/Secretary can vet
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-2">
