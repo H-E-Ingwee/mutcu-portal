@@ -20,8 +20,10 @@ router.get('/cycle', authenticate, async (req, res) => {
 });
 
 // GET /api/nominations/eligible/:positionId — eligible members for a position
+// Optimized: pre-filter in DB, then check eligibility in memory (no per-member DB calls for basic checks)
 router.get('/eligible/:positionId', authenticate, requireApproved, async (req, res) => {
   try {
+    const { search } = req.query;
     const { data: position } = await supabase.from('positions').select('*').eq('id', req.params.positionId).single();
     if (!position) return res.status(404).json({ error: 'Position not found' });
 
@@ -33,29 +35,68 @@ router.get('/eligible/:positionId', authenticate, requireApproved, async (req, r
       .limit(1)
       .single();
 
-    const { data: members } = await supabase.from('users')
+    // Pre-filter in DB: only active full members who are not first-year
+    // This dramatically reduces the number of members we need to check
+    let query = supabase.from('users')
       .select('id,name,photo_url,year_of_study,gender,primary_ministry,secondary_ministry,mutcu_number,membership_type,is_finalist,disciplinary_status,sgc_executive_role,faith_declaration_signed,course_type,school_prefix')
       .eq('enrollment_status', 'active')
-      .eq('membership_type', 'full');
+      .eq('membership_type', 'full')
+      .eq('disciplinary_status', 'clear')
+      .eq('sgc_executive_role', false)
+      .eq('faith_declaration_signed', true)
+      .gte('year_of_study', 2); // Not first year
 
-    const eligible = [];
-    for (const member of members || []) {
-      const result = await checkEligibility(member, position, cycle?.id);
-      if (result.eligible) {
-        eligible.push({
-          id: member.id,
-          name: member.name,
-          photo: member.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=04003D&color=FF9700&size=200&bold=true`,
-          year_of_study: member.year_of_study,
-          gender: member.gender,
-          ministry: member.primary_ministry || 'General Member',
-          mutcu_number: member.mutcu_number,
-          course_type: member.course_type,
-        });
+    // Apply gender constraint pre-filter if known
+    let requiredGender = position.gender_constraint;
+    if (!requiredGender && cycle?.chairperson_gender) {
+      const slug = (position.slug || '').toLowerCase();
+      if (slug.includes('1st') || slug.includes('first')) {
+        requiredGender = cycle.chairperson_gender === 'male' ? 'female' : 'male';
+      } else if (slug.includes('2nd') || slug.includes('second')) {
+        requiredGender = cycle.chairperson_gender === 'male' ? 'male' : 'female';
       }
     }
+    if (requiredGender) query = query.eq('gender', requiredGender);
 
-    res.json({ members: eligible });
+    // Apply search filter in DB
+    if (search && search.trim()) {
+      query = query.or(`name.ilike.%${search}%,primary_ministry.ilike.%${search}%,mutcu_number.ilike.%${search}%`);
+    }
+
+    const { data: members } = await query.order('name', { ascending: true });
+
+    // Now check term limits (requires DB call per member — only for remaining candidates)
+    const maxTerms = position.chair_max_one_term ? 1 : (position.max_terms || 2);
+    const eligible = [];
+
+    for (const member of members || []) {
+      // Skip finalists
+      const courseType = member.course_type || 'degree';
+      const prefix = (member.school_prefix || '').toUpperCase();
+      const maxYear = courseType === 'diploma' ? 3 : (prefix === 'SE' ? 5 : 4);
+      if ((member.year_of_study || 0) >= maxYear || member.is_finalist) continue;
+
+      // Check term limit (DB call — but only for pre-filtered candidates)
+      const { count } = await supabase.from('appointments')
+        .select('*', { count: 'exact', head: true })
+        .eq('position_id', position.id)
+        .eq('user_id', member.id);
+      if ((count || 0) >= maxTerms) continue;
+
+      eligible.push({
+        id: member.id,
+        name: member.name,
+        photo: member.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=04003D&color=FF9700&size=200&bold=true`,
+        year_of_study: member.year_of_study,
+        course_type: member.course_type,
+        gender: member.gender,
+        ministry: member.primary_ministry || 'General Member',
+        secondary_ministry: member.secondary_ministry,
+        mutcu_number: member.mutcu_number,
+      });
+    }
+
+    res.json({ members: eligible, total: eligible.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -166,25 +207,32 @@ router.get('/nominees', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/nominations/my-recommendations
+// GET /api/nominations/my-recommendations — includes both recommendations and suggestions
 router.get('/my-recommendations', authenticate, async (req, res) => {
   try {
     const { data: cycle } = await supabase.from('nomination_cycles')
       .select('id').not('status', 'in', '("draft","commissioned","cancelled")').order('created_at', { ascending: false }).limit(1).single();
-    if (!cycle) return res.json({ recommendations: [], suggestions: [] });
+    if (!cycle) return res.json({ recommendations: [], suggestions: [], recommended_positions: [], suggested_positions: [] });
 
     const [recsRes, suggsRes] = await Promise.all([
       supabase.from('recommendations')
-        .select('*, position:position_id(title), candidate:candidate_id(name,photo_url,mutcu_number)')
+        .select('*, position:position_id(id,title), candidate:candidate_id(name,photo_url,mutcu_number)')
         .eq('cycle_id', cycle.id)
         .eq('recommender_id', req.user.id),
       supabase.from('free_text_suggestions')
-        .select('*, position:position_id(title)')
+        .select('*, position:position_id(id,title)')
         .eq('cycle_id', cycle.id)
         .eq('suggester_id', req.user.id),
     ]);
 
-    res.json({ recommendations: recsRes.data || [], suggestions: suggsRes.data || [] });
+    const recommendations = recsRes.data || [];
+    const suggestions = suggsRes.data || [];
+
+    // Position IDs where user has already acted (either recommended or suggested)
+    const recommended_positions = recommendations.map(r => r.position_id);
+    const suggested_positions = suggestions.map(s => s.position_id);
+
+    res.json({ recommendations, suggestions, recommended_positions, suggested_positions });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
