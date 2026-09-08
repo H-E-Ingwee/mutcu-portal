@@ -98,7 +98,7 @@ router.get('/audit-log', authenticate, requireRole(...ADMIN_AND_SECRETARY), asyn
 })
 
 // GET /api/admin/cycles
-router.get('/cycles', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
+router.get('/cycles', authenticate, requireRole(...ADMIN_AND_SECRETARY, 'nc_chair', 'nc_secretary'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('nomination_cycles').select('*').order('created_at',{ascending:false})
     if (error) throw error

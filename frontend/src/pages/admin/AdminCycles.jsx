@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import { Plus, ChevronRight, Play, Settings } from 'lucide-react'
+import { AuthContext } from '../../context/AuthContext'
 
 const STATUS_ORDER = ['setup','prayer_period','nominations_open','vetting','nominees_published','objection_period','pre_agm','commissioned']
 const STATUS_LABEL = { setup:'Setup', prayer_period:'Prayer Period', nominations_open:'Nominations Open', vetting:'NC Vetting', nominees_published:'Nominees Published', objection_period:'Objection Period', pre_agm:'Pre-AGM', commissioned:'Commissioned' }
@@ -10,6 +11,8 @@ const STATUS_COLOR = { setup:'badge-gray', prayer_period:'badge-navy', nominatio
 const STATUS_NEXT = { setup:'prayer_period', prayer_period:'nominations_open', nominations_open:'vetting', vetting:'nominees_published', nominees_published:'objection_period', objection_period:'pre_agm', pre_agm:'commissioned' }
 
 export default function AdminCycles() {
+  const { user } = useContext(AuthContext)
+  const isReadOnly = ['nc_chair', 'nc_secretary'].includes(user?.role)
   const [cycles, setCycles] = useState([])
   const [loading, setLoading] = useState(true)
   const [advancing, setAdvancing] = useState({})
@@ -49,10 +52,9 @@ export default function AdminCycles() {
 
   return (
     <div>
-      <div className="page-header"><div><h1 className="page-title">Nomination Cycles</h1></div><Link to="/admin/cycles/create" className="btn-primary btn-sm"><Plus size={14} />New Cycle</Link></div>
+      
 
-      {cycles.length === 0 ? (
-        <div className="card p-10 text-center"><div className="text-gray-400 text-sm mb-3">No cycles created yet.</div><Link to="/admin/cycles/create" className="btn-primary btn-sm mx-auto">Create First Cycle</Link></div>
+      
       ) : cycles.map(c => (
         <div key={c.id} className="card mb-4">
           <div className="card-body">
@@ -88,31 +90,33 @@ export default function AdminCycles() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 flex-shrink-0">
-                {/* Advance Status Button */}
-                {c.status !== 'commissioned' && STATUS_NEXT[c.status] && (
-                  <button onClick={() => advance(c.id, c.status)} disabled={advancing[c.id]}
-                    className="btn-primary btn-sm">
-                    {advancing[c.id] ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <Play size={13} />}
-                    Advance to {STATUS_LABEL[STATUS_NEXT[c.status]]}
+              {!isReadOnly && (
+                <div className="flex flex-col gap-2 flex-shrink-0">
+                  {/* Advance Status Button */}
+                  {c.status !== 'commissioned' && STATUS_NEXT[c.status] && (
+                    <button onClick={() => advance(c.id, c.status)} disabled={advancing[c.id]}
+                      className="btn-primary btn-sm">
+                      {advancing[c.id] ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <Play size={13} />}
+                      Advance to {STATUS_LABEL[STATUS_NEXT[c.status]]}
+                    </button>
+                  )}
+                  {/* Set Status Button */}
+                  <button onClick={() => setShowStatusModal(c)} className="btn-outline btn-sm">
+                    <Settings size={13} />Set Status
                   </button>
-                )}
-                {/* Set Status Button */}
-                <button onClick={() => setShowStatusModal(c)} className="btn-outline btn-sm">
-                  <Settings size={13} />Set Status
-                </button>
-                <Link to={`/admin/cycles/${c.id}/appoint-nc`} className="btn-outline btn-sm text-xs justify-center">Appoint NC</Link>
-                {c.status === 'pre_agm' && (
-                  <button onClick={() => commission(c.id)} className="btn-teal btn-sm">Commission EC</button>
-                )}
-              </div>
+                  <Link to={`/admin/cycles/${c.id}/appoint-nc`} className="btn-outline btn-sm text-xs justify-center">Appoint NC</Link>
+                  {c.status === 'pre_agm' && (
+                    <button onClick={() => commission(c.id)} className="btn-teal btn-sm">Commission EC</button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
       ))}
 
-      {/* Set Status Modal */}
-      {showStatusModal && (
+      {/* Set Status Modal — only for admins */}
+      {showStatusModal && !isReadOnly && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="card p-6 max-w-sm w-full">
             <h3 className="font-montserrat font-bold text-navy mb-1">Set Cycle Status</h3>
