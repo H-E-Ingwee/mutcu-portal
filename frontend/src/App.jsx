@@ -140,7 +140,7 @@ function AppRoutes() {
 
         {/* Admin */}
         <Route path="admin" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminDashboard /></ProtectedRoute>} />
-        <Route path="admin/cycles" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminCycles /></ProtectedRoute>} />
+        <Route path="admin/cycles" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY,'nc_chair']}><AdminCycles /></ProtectedRoute>} />
         <Route path="admin/cycles/create" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminCycleCreate /></ProtectedRoute>} />
         <Route path="admin/cycles/:id/appoint-nc" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminAppointNC /></ProtectedRoute>} />
         <Route path="admin/roles" element={<ProtectedRoute roles={['super_admin']}><AdminRoles /></ProtectedRoute>} />

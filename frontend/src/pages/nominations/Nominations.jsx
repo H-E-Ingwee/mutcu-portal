@@ -349,16 +349,6 @@ export default function Nominations() {
                         </div>
                       )}
 
-                      {/* Prayerful note */}
-                      <div>
-                        <label className="form-label">
-                          Prayerful Note <span className="text-gray-400 normal-case font-normal">(optional — visible to NC only)</span>
-                        </label>
-                        <textarea className="form-input" rows={2}
-                          placeholder="Why do you prayerfully recommend this person for this position?"
-                          value={note} onChange={e => setNote(e.target.value)} />
-                      </div>
-
                       <button type="submit" disabled={submitting || !selectedCandidate} className="btn-primary">
                         <Send size={15} />{submitting ? 'Submitting...' : 'Submit Prayerful Recommendation'}
                       </button>
