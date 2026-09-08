@@ -1,9 +1,9 @@
-import { useEffect, useState, useContext } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import { Plus, ChevronRight, Play, Settings } from 'lucide-react'
-import { AuthContext } from '../../context/AuthContext'
+import { useAuth } from '../../context/AuthContext'
 
 const STATUS_ORDER = ['setup','prayer_period','nominations_open','vetting','nominees_published','objection_period','pre_agm','commissioned']
 const STATUS_LABEL = { setup:'Setup', prayer_period:'Prayer Period', nominations_open:'Nominations Open', vetting:'NC Vetting', nominees_published:'Nominees Published', objection_period:'Objection Period', pre_agm:'Pre-AGM', commissioned:'Commissioned' }
@@ -11,7 +11,7 @@ const STATUS_COLOR = { setup:'badge-gray', prayer_period:'badge-navy', nominatio
 const STATUS_NEXT = { setup:'prayer_period', prayer_period:'nominations_open', nominations_open:'vetting', vetting:'nominees_published', nominees_published:'objection_period', objection_period:'pre_agm', pre_agm:'commissioned' }
 
 export default function AdminCycles() {
-  const { user } = useContext(AuthContext)
+  const { user } = useAuth()
   const isReadOnly = ['nc_chair', 'nc_secretary'].includes(user?.role)
   const [cycles, setCycles] = useState([])
   const [loading, setLoading] = useState(true)
