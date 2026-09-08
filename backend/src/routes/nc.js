@@ -27,7 +27,8 @@ router.get('/dashboard', authenticate, requireRole(...NC_VIEW_ROLES), async (req
       const { data: uniqueCandidates } = await supabase.from('recommendations').select('candidate_id').eq('cycle_id', cycle.id).eq('position_id', pos.id);
       const unique = new Set((uniqueCandidates || []).map(r => r.candidate_id)).size;
       const { count: approvedCount } = await supabase.from('vetting_decisions').select('*', { count: 'exact', head: true }).eq('cycle_id', cycle.id).eq('position_id', pos.id).eq('decision', 'approved');
-      return { ...pos, recommendation_count: recCount || 0, unique_candidates: unique, approved_count: approvedCount || 0 };
+      const { count: vettedCount } = await supabase.from('vetting_decisions').select('*', { count: 'exact', head: true }).eq('cycle_id', cycle.id).eq('position_id', pos.id);
+      return { ...pos, recommendation_count: recCount || 0, unique_candidates: unique, approved_count: approvedCount || 0, vetted_count: vettedCount || 0 };
     }));
 
     const { count: suggestionCount } = await supabase.from('free_text_suggestions').select('*', { count: 'exact', head: true }).eq('cycle_id', cycle.id).eq('nc_action', 'pending');
@@ -84,7 +85,29 @@ router.get('/position/:positionId', authenticate, requireRole(...NC_VIEW_ROLES),
     const candidates = Object.values(candidateMap).sort((a, b) => b.recommendation_count - a.recommendation_count);
     const { data: decisions } = await supabase.from('vetting_decisions').select('*').eq('cycle_id', cycle.id).eq('position_id', req.params.positionId);
 
-    res.json({ cycle, position, candidates, decisions: decisions || [], userCanAct: canAct(req.user) });
+    // Get objection counts per candidate (nominee_id links to vetting_decisions candidate)
+    // nominees table: candidate_id field links to users
+    const { data: nominees } = await supabase.from('nominees')
+      .select('id, candidate_id').eq('cycle_id', cycle.id).eq('position_id', req.params.positionId);
+    const nomineeIdMap = {}; // candidate_id -> nominee_id
+    (nominees || []).forEach(n => { nomineeIdMap[n.candidate_id] = n.id; });
+
+    const { data: objections } = await supabase.from('objections')
+      .select('nominee_id').eq('cycle_id', cycle.id);
+    const objectionCounts = {}; // nominee_id -> count
+    (objections || []).forEach(o => { objectionCounts[o.nominee_id] = (objectionCounts[o.nominee_id] || 0) + 1; });
+
+    // Attach objection count to each candidate
+    const candidatesWithObjCount = candidates.map(c => ({
+      ...c,
+      objection_count: objectionCounts[nomineeIdMap[c.id]] || 0,
+    }));
+
+    // Vetting progress for dashboard: count vetted vs total
+    const vettedCount = (decisions || []).length;
+    const totalCandidates = candidates.length;
+
+    res.json({ cycle, position, candidates: candidatesWithObjCount, decisions: decisions || [], userCanAct: canAct(req.user), vettedCount, totalCandidates });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -100,6 +123,77 @@ router.post('/vet', authenticate, requireRole(...NC_ACTION_ROLES), async (req, r
     }, { onConflict: 'cycle_id,position_id,candidate_id' }).select().single();
     if (error) throw error;
     res.json({ decision: data, message: 'Vetting decision saved' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/nc/bulk-reject-ineligible — reject all ineligible candidates for a position
+router.post('/bulk-reject-ineligible', authenticate, requireRole(...NC_ACTION_ROLES), async (req, res) => {
+  try {
+    const { cycle_id, position_id } = req.body;
+    if (!cycle_id || !position_id) return res.status(400).json({ error: 'cycle_id and position_id required' });
+
+    const { data: position } = await supabase.from('positions').select('*').eq('id', position_id).single();
+    const { data: cycle } = await supabase.from('nomination_cycles').select('*').eq('id', cycle_id).single();
+    const { data: recommendations } = await supabase.from('recommendations')
+      .select('*, candidate:candidate_id(id,name,photo_url,year_of_study,gender,primary_ministry,mutcu_number,membership_type,is_finalist,disciplinary_status,sgc_executive_role,faith_declaration_signed,course_type,school_prefix)')
+      .eq('cycle_id', cycle_id).eq('position_id', position_id);
+
+    const candidateMap = {};
+    for (const rec of recommendations || []) {
+      const cid = rec.candidate_id;
+      if (!candidateMap[cid]) {
+        const eligibility = await checkEligibility(rec.candidate, position, cycle_id);
+        candidateMap[cid] = { ...rec.candidate, eligibility };
+      }
+    }
+
+    let rejectedCount = 0;
+    for (const [candidateId, candidate] of Object.entries(candidateMap)) {
+      if (!candidate.eligibility?.eligible) {
+        const failedChecks = (candidate.eligibility?.checks || []).filter(c => !c.passed).map(c => c.label).join(', ');
+        await supabase.from('vetting_decisions').upsert({
+          cycle_id, position_id, candidate_id: candidateId,
+          nc_member_id: req.user.id,
+          decision: 'rejected',
+          reason: `Auto-rejected: failed eligibility — ${failedChecks}`,
+          decided_at: new Date().toISOString(),
+        }, { onConflict: 'cycle_id,position_id,candidate_id' });
+        rejectedCount++;
+      }
+    }
+
+    res.json({ message: `${rejectedCount} ineligible candidate(s) rejected`, rejectedCount });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/nc/publish-summary — pre-publish check: what will be published
+router.get('/publish-summary', authenticate, requireRole('nc_chair', 'nc_secretary', 'ec_admin', 'super_admin'), async (req, res) => {
+  try {
+    const { cycle_id } = req.query;
+    if (!cycle_id) return res.status(400).json({ error: 'cycle_id required' });
+
+    const { data: positions } = await supabase.from('positions').select('*').eq('is_active', true).order('display_order');
+    const summary = [];
+
+    for (const pos of positions || []) {
+      const { data: approved } = await supabase.from('vetting_decisions')
+        .select('*, candidate:candidate_id(name,mutcu_number)')
+        .eq('cycle_id', cycle_id).eq('position_id', pos.id).eq('decision', 'approved');
+      const { count: totalCandidates } = await supabase.from('vetting_decisions')
+        .select('*', { count: 'exact', head: true }).eq('cycle_id', cycle_id).eq('position_id', pos.id);
+      summary.push({
+        position: pos,
+        approved_count: (approved || []).length,
+        total_vetted: totalCandidates || 0,
+        approved_candidates: (approved || []).map(d => ({ name: d.candidate?.name, mutcu_number: d.candidate?.mutcu_number })),
+        has_gap: (approved || []).length === 0,
+      });
+    }
+
+    const totalApproved = summary.reduce((s, p) => s + p.approved_count, 0);
+    const positionsWithGaps = summary.filter(p => p.has_gap).map(p => p.position.title);
+
+    res.json({ summary, totalApproved, positionsWithGaps, totalPositions: positions?.length || 0 });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -266,7 +360,7 @@ router.get('/report', authenticate, requireRole(...NC_VIEW_ROLES), async (req, r
 });
 
 // POST /api/nc/dissolve/:cycleId — Dissolve NC (21 days after AGM)
-router.post('/dissolve/:cycleId', authenticate, requireRole('ec_admin', 'super_admin'), async (req, res) => {
+router.post('/dissolve/:cycleId', authenticate, requireRole('nc_chair', 'ec_admin', 'super_admin'), async (req, res) => {
   try {
     const { cycleId } = req.params;
     const { data: cycle } = await supabase.from('nomination_cycles').select('status,agm_date').eq('id', cycleId).single();

@@ -105,7 +105,7 @@ export default function NCSuggestions() {
                           {actionConfig[s.nc_action]?.label||s.nc_action}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-400 mb-1">Suggested by: {s.suggester?.name}</div>
+                      <div className="text-xs text-gray-400 mb-1 italic">Submitted anonymously</div>
                       {s.description && <div className="text-xs text-gray-500 italic mb-1">Description: {s.description}</div>}
                       {s.why_recommend && <div className="text-xs text-gray-500 mb-1">Why: {s.why_recommend}</div>}
                       {s.nc_notes && <div className="text-xs text-teal font-semibold">NC Note: {s.nc_notes}</div>}

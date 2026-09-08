@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Eye } from 'lucide-react'
 
 export default function NCObjections() {
+  const { isNCAction } = useAuth()
+  const canAct = isNCAction ? isNCAction() : false
   const [objections, setObjections] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})
@@ -28,6 +31,16 @@ export default function NCObjections() {
       <div className="page-header">
         <div><Link to="/nc" className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 mb-2"><ArrowLeft size={12} />Back</Link><h1 className="page-title">Objections Inbox</h1></div>
       </div>
+      {/* View-only notice */}
+      {!canAct && (
+        <div className="card p-3 mb-4 bg-blue-50 border border-blue-200">
+          <div className="flex items-center gap-2 text-blue-700 text-sm">
+            <Eye size={16} />
+            <span>You have <strong>view-only access</strong>. Only the NC Chairperson and Secretary can resolve objections.</span>
+          </div>
+        </div>
+      )}
+
       {objections.length === 0 ? (
         <div className="card p-8 text-center"><div className="text-gray-400 text-sm">No objections submitted yet.</div></div>
       ) : objections.map(obj => (
@@ -41,7 +54,12 @@ export default function NCObjections() {
           </div>
           <div className="card-body">
             <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm text-gray-600">{obj.grounds}</div>
-            <ObjectionResolveForm objId={obj.id} current={obj} onResolve={resolve} saving={saving[obj.id]} />
+            {canAct
+              ? <ObjectionResolveForm objId={obj.id} current={obj} onResolve={resolve} saving={saving[obj.id]} />
+              : obj.nc_decision
+                ? <div className="text-xs text-gray-500 italic">Resolution: <strong>{obj.nc_decision.replace(/_/g,' ')}</strong>{obj.nc_decision_reason ? ` — ${obj.nc_decision_reason}` : ''}</div>
+                : <div className="text-xs text-gray-400 italic">Awaiting NC resolution</div>
+            }
           </div>
         </div>
       ))}
