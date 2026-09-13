@@ -28,23 +28,35 @@ export default function Analytics() {
   useEffect(() => { fetchData() }, [])
 
   // ── Export CSV ──────────────────────────────────────────────────────────────
-  const exportCSV = async () => {
+  const downloadReport = async (endpoint, filename) => {
     setExporting(true)
     try {
-      const response = await api.get('/admin/export/members', { responseType: 'blob' })
+      const response = await api.get(endpoint, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', `MUTCU-Members-${new Date().toISOString().split('T')[0]}.csv`)
+      link.setAttribute('download', filename)
       document.body.appendChild(link)
       link.click()
       link.remove()
+      window.URL.revokeObjectURL(url)
     } catch {
       alert('Export failed. Please try again.')
     } finally {
       setExporting(false)
     }
   }
+
+  const exportCSV = () => downloadReport('/analytics/export/members', `MUTCU-Members-${new Date().toISOString().split('T')[0]}.csv`)
+
+  const REPORT_TYPES = [
+    { label: 'Full Members Report', endpoint: '/analytics/export/members', file: 'MUTCU-Members', icon: 'fa-users', desc: 'All member details — name, email, ministry, year, status' },
+    { label: 'Ministry Distribution', endpoint: '/analytics/export/ministry', file: 'MUTCU-Ministry', icon: 'fa-church', desc: 'Members grouped by ministry' },
+    { label: 'Academic Report', endpoint: '/analytics/export/academic', file: 'MUTCU-Academic', icon: 'fa-graduation-cap', desc: 'Year of study, course type, school distribution' },
+    { label: 'Nominations Report', endpoint: '/analytics/export/nominations', file: 'MUTCU-Nominations', icon: 'fa-vote-yea', desc: 'Recommendations and candidates for active cycle' },
+    { label: 'Leadership History', endpoint: '/analytics/export/leadership', file: 'MUTCU-Leadership', icon: 'fa-crown', desc: 'All EC appointments and leadership history' },
+    { label: 'Disciplinary Cases', endpoint: '/analytics/export/disciplinary', file: 'MUTCU-Disciplinary', icon: 'fa-gavel', desc: 'All disciplinary cases and outcomes' },
+  ]
 
   // ── Print branded report ────────────────────────────────────────────────────
   const printReport = () => {
@@ -323,12 +335,35 @@ export default function Analytics() {
             <Printer size={14} /> Print Report
           </button>
           <button onClick={exportCSV} disabled={exporting} className="btn-primary btn-sm">
-            {exporting
-              ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
-              : <Download size={14} />
-            }
-            {exporting ? 'Exporting...' : 'Export CSV'}
+            {exporting ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <Download size={14} />}
+            {exporting ? 'Exporting...' : 'Export Members CSV'}
           </button>
+        </div>
+      </div>
+
+      {/* ── Report Downloads ── */}
+      <div className="card mb-6">
+        <div className="card-header">
+          <h2 className="font-montserrat font-bold text-navy text-sm">Download Reports</h2>
+          <span className="text-gray-400 text-xs">Download specific reports as CSV files</span>
+        </div>
+        <div className="card-body">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {REPORT_TYPES.map((r, i) => (
+              <button key={i} disabled={exporting}
+                onClick={() => downloadReport(r.endpoint, `${r.file}-${new Date().toISOString().split('T')[0]}.csv`)}
+                className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-orange/30 hover:bg-orange/5 transition-all text-left group disabled:opacity-50">
+                <div className="w-9 h-9 rounded-xl bg-navy flex items-center justify-center flex-shrink-0 group-hover:bg-orange transition-colors">
+                  <i className={`fas ${r.icon} text-orange text-sm group-hover:text-white transition-colors`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-montserrat font-bold text-navy text-sm group-hover:text-orange transition-colors">{r.label}</div>
+                  <div className="text-gray-400 text-xs mt-0.5 leading-relaxed">{r.desc}</div>
+                </div>
+                <Download size={14} className="text-gray-300 group-hover:text-orange transition-colors flex-shrink-0 mt-1" />
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

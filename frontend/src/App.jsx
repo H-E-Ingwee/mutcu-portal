@@ -13,6 +13,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import ProfileComplete from './pages/profile/ProfileComplete'
 import ProfileEdit from './pages/profile/ProfileEdit'
+import EmailChange from './pages/profile/EmailChange'
 import MemberCard from './pages/MemberCard'
 import PublicProfile from './pages/PublicProfile'
 import Announcements from './pages/Announcements'
@@ -111,6 +112,7 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="profile/edit" element={<ProfileEdit />} />
+        <Route path="profile/change-email" element={<EmailChange />} />
         <Route path="member-card" element={<MemberCard />} />
         <Route path="announcements" element={<Announcements />} />
         <Route path="contact" element={<Contact />} />
@@ -129,7 +131,7 @@ function AppRoutes() {
         <Route path="nc/suggestions" element={<ProtectedRoute roles={NC_ROLES}><NCSuggestions /></ProtectedRoute>} />
 
         {/* Ministry Members — for ministry secretaries and EC coordinators */}
-        <Route path="secretary/ministry-members" element={<ProtectedRoute roles={[...ALL_SECRETARY_ROLES, 'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','1st_vp','2nd_vp','treasurer','vice_secretary']}><MinistryMembers /></ProtectedRoute>} />
+        <Route path="secretary/ministry-members" element={<ProtectedRoute roles={[...ALL_SECRETARY_ROLES, 'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','1st_vp','2nd_vp','cu_treasurer','vice_secretary']}><MinistryMembers /></ProtectedRoute>} />
 
         {/* Secretary — all secretary roles */}
         <Route path="secretary/members" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, ...ALL_SECRETARY_ROLES]}><MembersList /></ProtectedRoute>} />

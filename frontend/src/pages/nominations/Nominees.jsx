@@ -88,17 +88,37 @@ export default function Nominees() {
     user?.membership_type === 'full' &&
     user?.enrollment_status === 'active'
 
-  // Show empty state if published but no nominees
+  // Show empty state if published but no nominees (NC approved nobody yet)
   if (sorted.length === 0) {
     return (
       <div className="max-w-lg mx-auto mt-12 text-center">
         <div className="card p-8">
           <Award size={40} className="text-gray-300 mx-auto mb-4" />
-          <h2 className="font-montserrat font-bold text-navy text-lg mb-2">No Nominees Published Yet</h2>
-          <p className="text-gray-500 text-sm">The Nomination College has not yet published any nominees for {data.cycle?.title}.</p>
+          <h2 className="font-montserrat font-bold text-navy text-lg mb-2">Nominees Being Finalised</h2>
+          <p className="text-gray-500 text-sm mb-3">
+            The Nomination College has published the cycle but is still finalising the nominee list for <strong>{data.cycle?.title}</strong>.
+          </p>
+          <p className="text-xs text-gray-400">
+            The NC Chair/Secretary needs to approve candidates in the NC Panel, then publish nominees. Check back soon.
+          </p>
         </div>
       </div>
     )
+  }
+
+  const handleShare = async () => {
+    const url = window.location.href
+    const text = `MUTCU ${data.cycle?.title} — Published Nominees. View at: ${url}`
+    if (navigator.share) {
+      try { await navigator.share({ title: `MUTCU Nominees — ${data.cycle?.title}`, text, url }) } catch {}
+    } else {
+      await navigator.clipboard.writeText(url)
+      toast.success('Link copied to clipboard!')
+    }
+  }
+
+  const handlePrint = () => {
+    window.print()
   }
 
   return (
@@ -107,6 +127,14 @@ export default function Nominees() {
         <div>
           <h1 className="page-title">Published Nominees</h1>
           <p className="page-subtitle">{data.cycle?.title} — Executive Council Nominees</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleShare} className="btn-outline btn-sm">
+            <i className="fas fa-share-alt mr-1" /> Share
+          </button>
+          <button onClick={handlePrint} className="btn-outline btn-sm">
+            <i className="fas fa-print mr-1" /> Print
+          </button>
         </div>
       </div>
 

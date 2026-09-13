@@ -39,6 +39,7 @@ export default function Layout() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const [pendingChangesCount, setPendingChangesCount] = useState(0)
 
   const isPending = user?.enrollment_status === 'pending'
   const myMinistry = getMyMinistry ? getMyMinistry() : null
@@ -51,6 +52,13 @@ export default function Layout() {
     const interval = setInterval(fetchUnreadCount, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  // Fetch pending profile changes count for secretary/admin
+  useEffect(() => {
+    const isSecretary = ['super_admin', 'ec_admin', 'cu_secretary'].includes(user?.role)
+    if (!isSecretary) return
+    api.get('/users/pending-changes').then(r => setPendingChangesCount(r.data.total || 0)).catch(() => {})
+  }, [user?.role])
 
   const fetchUnreadCount = async () => {
     try {
@@ -183,7 +191,7 @@ export default function Layout() {
                 <>
                   <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Secretary</div>
                   <NavItem to="/secretary/members" icon={Users} label="Member Register" />
-                  <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" />
+                  <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" badge={pendingChangesCount} />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}

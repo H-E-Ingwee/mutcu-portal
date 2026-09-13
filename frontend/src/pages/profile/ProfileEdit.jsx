@@ -233,7 +233,12 @@ export default function ProfileEdit() {
             </div>
             <div>
               <div className="font-montserrat font-bold text-navy">{user?.name}</div>
-              <div className="text-gray-400 text-xs">{user?.email}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-gray-400 text-xs">{user?.email}</div>
+                <a href="/profile/change-email" className="text-orange text-xs font-semibold hover:underline flex items-center gap-1">
+                  <i className="fas fa-edit text-xs" /> Change Email
+                </a>
+              </div>
               {user?.mutcu_number && <div className="text-orange font-montserrat font-bold text-sm mt-1">{user.mutcu_number}</div>}
               <button type="button" onClick={() => document.querySelector('input[type=file]').click()}
                 className="text-xs text-orange hover:underline mt-1 block">
@@ -286,9 +291,17 @@ export default function ProfileEdit() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="form-label">Email Address</label>
-                <input type="email" className="form-input" value={pendingForm.email}
-                  onChange={e => setPendingForm(f => ({ ...f, email: e.target.value }))} />
+                <div>
+                  <label className="form-label">Email Address</label>
+                  <div className="flex items-center gap-2">
+                    <input type="email" className="form-input flex-1" value={pendingForm.email} disabled
+                      style={{ background: '#f9fafb', color: '#6B7280' }} />
+                    <a href="/profile/change-email" className="btn-outline btn-sm text-xs whitespace-nowrap">
+                      Change Email
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">Use the "Change Email" button to update your email address securely.</p>
+                </div>
               </div>
               <div>
                 <label className="form-label">Student Reg. No.</label>

@@ -52,11 +52,13 @@ router.get('/', authenticate, requireRole(...ALL_SECRETARY_ROLES), async (req, r
     const { search, ministry, year, type, status, page = 1, limit = 30 } = req.query;
     let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
 
-    // Ministry secretaries only see members of their ministry
+    // Ministry secretaries/coordinators only see members of their ministry
     const ministryForRole = MINISTRY_ROLE_MAP[req.user.role];
     if (ministryForRole) {
-      query = query.or();
+      query = query.or(`primary_ministry.eq.${ministryForRole},secondary_ministry.eq.${ministryForRole}`)
     }
+    // Exclude soft-deleted accounts
+    query = query.is('deleted_at', null)
 
     if (search) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,mutcu_number.ilike.%${search}%,student_id.ilike.%${search}%`);
     if (ministry) query = query.eq('primary_ministry', ministry);

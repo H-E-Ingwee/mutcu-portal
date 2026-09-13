@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
+import toast from 'react-hot-toast'
 import { Plus, Upload, Search, Download } from 'lucide-react'
 
 export default function MembersList() {
@@ -14,6 +15,17 @@ export default function MembersList() {
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => { api.get('/ministries').then(r => setMinistries(r.data.ministries||[])).catch(()=>{}) }, [])
+
+  const handleDelete = async (id, name) => {
+    const reason = window.prompt(`Delete account for ${name}?\n\nEnter reason for deletion (or cancel):`)
+    if (reason === null) return // cancelled
+    try {
+      await api.delete(`/users/${id}`, { data: { reason: reason || 'Deleted by secretary' } })
+      toast.success(`Account for ${name} deleted`)
+      setMembers(prev => prev.filter(m => m.id !== id))
+      setTotal(prev => prev - 1)
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete account') }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -97,7 +109,16 @@ export default function MembersList() {
                     <td className="text-sm text-gray-500">{m.primary_ministry||'General'}</td>
                     <td><span className="badge badge-teal">{m.membership_type}</span></td>
                     <td>{m.enrollment_status==='active' ? <span className="badge badge-green">Active</span> : m.enrollment_status==='pending' ? <span className="badge badge-orange">Pending</span> : <span className="badge badge-gray">{m.enrollment_status}</span>}</td>
-                    <td><Link to={`/secretary/members/${m.id}/edit`} className="btn-outline btn-sm text-xs">Edit</Link></td>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        {m.pending_changes && (
+                          <span title="Profile changes pending approval" className="w-2 h-2 rounded-full bg-orange animate-pulse flex-shrink-0" />
+                        )}
+                        <Link to={`/secretary/members/${m.id}/edit`} className="btn-outline btn-sm text-xs">Edit</Link>
+                        <button onClick={() => handleDelete(m.id, m.name)}
+                          className="btn-outline btn-sm text-xs text-red border-red/30 hover:bg-red/5">Del</button>
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
