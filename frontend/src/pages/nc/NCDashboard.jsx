@@ -213,7 +213,7 @@ export default function NCDashboard() {
             {myNCRole && <span className="ml-2 text-xs text-gray-400">{roleLabel}</span>}
           </p>
         </div>
-        
+        {canAct && cycle.status === 'commissioned' && !cycle.nc_dissolution_date && (
             <button onClick={dissolveNC} disabled={dissolving} className="btn-outline btn-sm text-red border-red/30 hover:bg-red/5">
               <Shield size={14} />{dissolving ? 'Dissolving...' : 'Dissolve NC'}
             </button>
@@ -225,7 +225,6 @@ export default function NCDashboard() {
             </button>
           )}
         </div>
-      </div>
 
       {/* Deadline countdowns */}
       {cycle.status === 'vetting' && (
