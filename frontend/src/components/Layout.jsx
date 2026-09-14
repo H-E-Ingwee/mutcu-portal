@@ -196,14 +196,7 @@ export default function Layout() {
                 </>
               )}
 
-              {/* CU Treasurer */}
-              {user?.role === 'cu_treasurer' && (
-                <>
-                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Treasurer</div>
-                  <NavItem to="/treasurer" icon={DollarSign} label="Treasurer Dashboard" />
-                  <NavItem to="/treasurer/requisitions" icon={FileText} label="Requisitions" />
-                </>
-              )}
+              
 
               {/* Admin */}
               {isAdmin && isAdmin() && (

@@ -4,11 +4,12 @@ const supabase = require('../lib/supabase');
 const { authenticate, requireRole } = require('../middleware/auth');
 
 const ADMIN = ['super_admin', 'ec_admin'];
-const CAN_MANAGE_CALENDAR = ['super_admin', 'ec_admin', 'cu_secretary', 'treasurer', '1st_vp', '2nd_vp',
+const CAN_MANAGE_CALENDAR = ['super_admin', 'ec_admin', 'cu_secretary', 'cu_treasurer', 'vice_secretary', '1st_vp', '2nd_vp',
   'prayer_coordinator', 'music_coordinator', 'missions_coordinator', 'bible_study_coordinator',
   'discipleship_coordinator', 'tech_media_coordinator', 'creative_arts_coordinator',
   'music_secretary', 'creative_arts_secretary', 'technical_media_secretary', 'hospitality_secretary',
-  'prayer_secretary', 'missions_secretary', 'bible_study_secretary', 'discipleship_secretary', 'welfare_secretary'];
+  'prayer_secretary', 'missions_secretary', 'bible_study_secretary', 'discipleship_secretary', 'welfare_secretary',
+  'interim_chair', 'interim_secretary', 'interim_treasurer'];
 
 // GET /api/calendar — get all published events (authenticated members)
 router.get('/', authenticate, async (req, res) => {

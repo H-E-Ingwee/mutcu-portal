@@ -27,7 +27,7 @@ router.post('/', authenticate, async (req, res) => {
 
     // Get admin emails and notify (fire and forget)
     supabase.from('users').select('email, name')
-      .in('role', ['super_admin', 'ec_admin', 'cu_secretary'])
+      .in('role', ['super_admin', 'ec_admin', 'cu_secretary', 'cu_treasurer'])
       .eq('is_active', true)
       .then(({ data: admins }) => {
         if (!admins || admins.length === 0) return
@@ -148,7 +148,7 @@ router.post('/reply', authenticate, async (req, res) => {
 // GET /api/messages — get all messages (admin only)
 router.get('/', authenticate, async (req, res) => {
   try {
-    if (!['super_admin','ec_admin','cu_secretary'].includes(req.user.role)) {
+    if (!['super_admin','ec_admin','cu_secretary','cu_treasurer'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Access denied' })
     }
     const { data } = await supabase.from('messages')

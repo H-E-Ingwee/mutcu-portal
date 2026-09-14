@@ -3,9 +3,10 @@ const router = express.Router()
 const supabase = require('../lib/supabase')
 const { authenticate, requireRole } = require('../middleware/auth')
 
-const CAN_POST = ['super_admin', 'ec_admin', 'cu_secretary', 'treasurer', '1st_vp', '2nd_vp',
+const CAN_POST = ['super_admin', 'ec_admin', 'cu_secretary', 'cu_treasurer', 'vice_secretary', '1st_vp', '2nd_vp',
   'prayer_coordinator', 'music_coordinator', 'missions_coordinator', 'bible_study_coordinator',
-  'discipleship_coordinator', 'tech_media_coordinator', 'creative_arts_coordinator']
+  'discipleship_coordinator', 'tech_media_coordinator', 'creative_arts_coordinator',
+  'interim_chair', 'interim_secretary', 'interim_treasurer']
 
 // GET /api/announcements
 router.get('/', authenticate, async (req, res) => {

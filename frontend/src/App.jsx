@@ -72,7 +72,7 @@ const ALL_SECRETARY_ROLES = [
 
 const NC_ROLES = ['nc_member', 'nc_chair', 'nc_secretary', 'ec_admin', 'super_admin']
 const ADMIN_ROLES = ['ec_admin', 'super_admin']
-const ADMIN_AND_SECRETARY = ['ec_admin', 'super_admin', 'cu_secretary']
+const ADMIN_AND_SECRETARY = ['ec_admin', 'super_admin', 'cu_secretary', 'cu_treasurer']
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth()
@@ -143,7 +143,7 @@ function AppRoutes() {
         {/* Admin */}
         <Route path="admin" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminDashboard /></ProtectedRoute>} />
         <Route path="admin/cycles" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY,'nc_chair']}><AdminCycles /></ProtectedRoute>} />
-        <Route path="admin/cycles/create" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY,'nc_chair']}><AdminCycleCreate /></ProtectedRoute>} />
+        <Route path="admin/cycles/create" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminCycleCreate /></ProtectedRoute>} />
         <Route path="admin/cycles/:id/appoint-nc" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminAppointNC /></ProtectedRoute>} />
         <Route path="admin/roles" element={<ProtectedRoute roles={['super_admin']}><AdminRoles /></ProtectedRoute>} />
         <Route path="admin/audit-log" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminAuditLog /></ProtectedRoute>} />
