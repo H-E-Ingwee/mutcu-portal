@@ -5,6 +5,7 @@ const { authenticate, requireRole } = require('../middleware/auth')
 const { sendCycleAnnouncementEmail } = require('../lib/email')
 
 const ADMIN = ['super_admin','ec_admin']
+const ADMIN_AND_NC_CHAIR = ['super_admin','ec_admin','nc_chair']
 // CU Secretary has broad access (almost same as Chairperson) except nominations and role management
 const ADMIN_AND_SECRETARY = ['super_admin','ec_admin','cu_secretary']
 const CYCLE_STATUSES = ['setup','prayer_period','nominations_open','vetting','nominees_published','objection_period','pre_agm','commissioned']
@@ -28,8 +29,8 @@ router.get('/dashboard', authenticate, requireRole(...ADMIN_AND_SECRETARY), asyn
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// POST /api/admin/cycles/:id/advance-status
-router.post('/cycles/:id/advance-status', authenticate, requireRole(...ADMIN), async (req, res) => {
+// POST /api/admin/cycles/:id/advance-status — NC Chair can advance from vetting stages
+router.post('/cycles/:id/advance-status', authenticate, requireRole(...ADMIN_AND_NC_CHAIR), async (req, res) => {
   try {
     const { data: cycle } = await supabase.from('nomination_cycles').select('*').eq('id', req.params.id).single()
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' })
@@ -70,11 +71,20 @@ router.post('/cycles/:id/advance-status', authenticate, requireRole(...ADMIN), a
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// POST /api/admin/cycles/:id/set-status
-router.post('/cycles/:id/set-status', authenticate, requireRole(...ADMIN), async (req, res) => {
+// POST /api/admin/cycles/:id/set-status — NC Chair can set vetting-related statuses directly
+router.post('/cycles/:id/set-status', authenticate, requireRole(...ADMIN_AND_NC_CHAIR), async (req, res) => {
   try {
     const { status } = req.body
     if (!CYCLE_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' })
+
+    // NC Chair can only set vetting-related statuses
+    if (req.user.role === 'nc_chair') {
+      const allowedStatuses = ['vetting', 'nominees_published', 'objection_period', 'pre_agm']
+      if (!allowedStatuses.includes(status)) {
+        return res.status(403).json({ error: 'NC Chair can only set vetting-related statuses' })
+      }
+    }
+
     const { data, error } = await supabase.from('nomination_cycles')
       .update({ status, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
     if (error) throw error
@@ -97,7 +107,7 @@ router.get('/audit-log', authenticate, requireRole(...ADMIN_AND_SECRETARY), asyn
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// GET /api/admin/cycles
+// GET /api/admin/cycles — NC Chair & Secretary can read cycles
 router.get('/cycles', authenticate, requireRole(...ADMIN_AND_SECRETARY, 'nc_chair', 'nc_secretary'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('nomination_cycles').select('*').order('created_at',{ascending:false})
@@ -106,8 +116,8 @@ router.get('/cycles', authenticate, requireRole(...ADMIN_AND_SECRETARY, 'nc_chai
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// POST /api/admin/cycles
-router.post('/cycles', authenticate, requireRole(...ADMIN), async (req, res) => {
+// POST /api/admin/cycles — NC Chair can create cycles
+router.post('/cycles', authenticate, requireRole(...ADMIN_AND_NC_CHAIR), async (req, res) => {
   try {
     const { data, error } = await supabase.from('nomination_cycles')
       .insert({ ...req.body, created_by: req.user.id, status: 'setup' }).select().single()
@@ -116,8 +126,8 @@ router.post('/cycles', authenticate, requireRole(...ADMIN), async (req, res) => 
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// PUT /api/admin/cycles/:id
-router.put('/cycles/:id', authenticate, requireRole(...ADMIN), async (req, res) => {
+// PUT /api/admin/cycles/:id — NC Chair can configure cycles
+router.put('/cycles/:id', authenticate, requireRole(...ADMIN_AND_NC_CHAIR), async (req, res) => {
   try {
     const { data, error } = await supabase.from('nomination_cycles')
       .update({ ...req.body, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
@@ -126,8 +136,8 @@ router.put('/cycles/:id', authenticate, requireRole(...ADMIN), async (req, res) 
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// POST /api/admin/cycles/:id/nc
-router.post('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, res) => {
+// POST /api/admin/cycles/:id/nc — NC Chair can appoint NC members
+router.post('/cycles/:id/nc', authenticate, requireRole(...ADMIN_AND_NC_CHAIR), async (req, res) => {
   try {
     const { user_id, nc_role } = req.body
     const cycleId = req.params.id
@@ -150,8 +160,8 @@ router.post('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, r
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// GET /api/admin/cycles/:id/nc
-router.get('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, res) => {
+// GET /api/admin/cycles/:id/nc — NC Chair can view NC members
+router.get('/cycles/:id/nc', authenticate, requireRole(...ADMIN_AND_NC_CHAIR), async (req, res) => {
   try {
     const { data } = await supabase.from('nc_members')
       .select('*, user:user_id(id,name,photo_url,email,student_id,mutcu_number)')
@@ -160,8 +170,8 @@ router.get('/cycles/:id/nc', authenticate, requireRole(...ADMIN), async (req, re
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// DELETE /api/admin/cycles/:cycleId/nc/:ncId
-router.delete('/cycles/:cycleId/nc/:ncId', authenticate, requireRole(...ADMIN), async (req, res) => {
+// DELETE /api/admin/cycles/:cycleId/nc/:ncId — NC Chair can remove NC members
+router.delete('/cycles/:cycleId/nc/:ncId', authenticate, requireRole(...ADMIN_AND_NC_CHAIR), async (req, res) => {
   try {
     await supabase.from('nc_members').delete().eq('id', req.params.ncId)
     res.json({ message: 'NC member removed' })

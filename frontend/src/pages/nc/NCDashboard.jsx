@@ -213,21 +213,7 @@ export default function NCDashboard() {
             {myNCRole && <span className="ml-2 text-xs text-gray-400">{roleLabel}</span>}
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={printFullReport} disabled={printing} className="btn-outline btn-sm">
-            <Printer size={14} />{printing ? 'Generating...' : 'Full Report'}
-          </button>
-          <Link to="/nc/suggestions" className="btn-outline btn-sm relative">
-            <MessageSquare size={14} />Suggestions
-            {suggestionCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-orange text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{suggestionCount}</span>}
-          </Link>
-          <Link to="/nc/objections" className="btn-outline btn-sm relative">
-            <AlertTriangle size={14} />Objections
-            {objectionCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{objectionCount}</span>}
-          </Link>
-          
-          {/* Dissolve NC */}
-          {(canAct || ['ec_admin', 'super_admin'].includes(user?.role)) && cycle.status === 'commissioned' && !cycle.nc_dissolution_date && (
+        
             <button onClick={dissolveNC} disabled={dissolving} className="btn-outline btn-sm text-red border-red/30 hover:bg-red/5">
               <Shield size={14} />{dissolving ? 'Dissolving...' : 'Dissolve NC'}
             </button>
@@ -275,7 +261,7 @@ export default function NCDashboard() {
       )}
       {cycle.status === 'nominees_published' && (
         <div className="card p-3 mb-4 bg-teal/5 border border-teal/20">
-          <div className="text-teal text-sm font-semibold">✅ Nominees published! Members can now view nominees. EC Admin will advance to Objection Period.</div>
+          <div className="text-teal text-sm font-semibold">✅ Nominees published! Members can now view nominees and submit objections. Advance to Objection Period when ready.</div>
         </div>
       )}
       {cycle.status === 'objection_period' && (
