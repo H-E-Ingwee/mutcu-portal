@@ -9,7 +9,7 @@ const ROLE_GROUPS = [
     { value: 'ec_admin', label: 'Chairperson of the Union' },
     { value: 'cu_secretary', label: 'CU Secretary' },
     { value: 'vice_secretary', label: 'Vice Secretary' },
-    { value: 'treasurer', label: 'CU Treasurer' },
+    { value: 'cu_treasurer', label: 'CU Treasurer' },
     { value: '1st_vp', label: '1st Vice Chairperson (Female)' },
     { value: '2nd_vp', label: '2nd Vice Chairperson (Male)' },
   ]},
