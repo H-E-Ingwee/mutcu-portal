@@ -1,10 +1,218 @@
 const express = require('express')
 const router = express.Router()
+const multer = require('multer')
 const supabase = require('../lib/supabase')
 const { authenticate, requireRole } = require('../middleware/auth')
+const { parseExcelBudget, generateBudgetTemplate } = require('../lib/budgetParser')
 
 const TREASURER = ['cu_treasurer', 'super_admin', 'ec_admin']
 const CAN_VIEW = ['cu_treasurer', 'super_admin', 'ec_admin', 'cu_secretary']
+
+// Multer — memory storage for Excel parsing (no disk write)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-excel', // .xls
+    ]
+    if (allowed.includes(file.mimetype) || file.originalname.match(/\.(xlsx|xls)$/i)) {
+      cb(null, true)
+    } else {
+      cb(new Error('Only Excel files (.xlsx, .xls) are accepted'))
+    }
+  },
+})
+
+// ═══════════════════════════════════════════════════════════════
+// FINANCIAL YEARS
+// ═══════════════════════════════════════════════════════════════
+
+// GET /api/treasury/years — list all financial years
+router.get('/years', authenticate, requireRole(...CAN_VIEW), async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('financial_years')
+      .select('*, creator:created_by(name)')
+      .order('start_date', { ascending: false })
+    if (error) throw error
+    res.json({ years: data || [] })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// GET /api/treasury/years/active — get the currently active year
+router.get('/years/active', authenticate, async (req, res) => {
+  try {
+    const { data } = await supabase.from('financial_years')
+      .select('*').eq('is_active', true).single()
+    res.json({ year: data || null })
+  } catch (err) { res.status(500).json({ year: null }) }
+})
+
+// POST /api/treasury/years — create a new financial year
+router.post('/years', authenticate, requireRole(...TREASURER), async (req, res) => {
+  try {
+    const { label, start_date, end_date, notes } = req.body
+    if (!label || !start_date || !end_date) {
+      return res.status(400).json({ error: 'label, start_date, and end_date are required' })
+    }
+    // Validate label format
+    if (!/^\d{4}\/\d{4}$/.test(label)) {
+      return res.status(400).json({ error: 'Label must be in format YYYY/YYYY (e.g. 2026/2027)' })
+    }
+    const { data, error } = await supabase.from('financial_years')
+      .insert({ label, start_date, end_date, notes, is_active: false, is_closed: false, created_by: req.user.id })
+      .select().single()
+    if (error) throw error
+    res.status(201).json({ year: data, message: `Financial year ${label} created` })
+  } catch (err) {
+    if (err.message?.includes('unique')) return res.status(400).json({ error: 'A financial year with this label already exists' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PUT /api/treasury/years/:id/activate — set as active year
+router.put('/years/:id/activate', authenticate, requireRole(...TREASURER), async (req, res) => {
+  try {
+    // Check year is not closed
+    const { data: yr } = await supabase.from('financial_years').select('*').eq('id', req.params.id).single()
+    if (!yr) return res.status(404).json({ error: 'Year not found' })
+    if (yr.is_closed) return res.status(400).json({ error: 'Cannot activate a closed financial year' })
+
+    // Deactivate all other years first
+    await supabase.from('financial_years').update({ is_active: false }).neq('id', req.params.id)
+
+    // Activate this one
+    const { data, error } = await supabase.from('financial_years')
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).select().single()
+    if (error) throw error
+    res.json({ year: data, message: `${data.label} is now the active financial year` })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// PUT /api/treasury/years/:id/close — lock year after audit (irreversible)
+router.put('/years/:id/close', authenticate, requireRole('cu_treasurer', 'super_admin'), async (req, res) => {
+  try {
+    const { data: yr } = await supabase.from('financial_years').select('*').eq('id', req.params.id).single()
+    if (!yr) return res.status(404).json({ error: 'Year not found' })
+    if (yr.is_closed) return res.status(400).json({ error: 'Year is already closed' })
+    if (yr.is_active) return res.status(400).json({ error: 'Cannot close the active year. Activate another year first.' })
+
+    const { data, error } = await supabase.from('financial_years')
+      .update({ is_closed: true, closed_by: req.user.id, closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', req.params.id).select().single()
+    if (error) throw error
+    res.json({ year: data, message: `Financial year ${data.label} has been closed and locked for audit` })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// DELETE /api/treasury/years/:id — delete year (only if no data attached and not active/closed)
+router.delete('/years/:id', authenticate, requireRole('super_admin'), async (req, res) => {
+  try {
+    const { data: yr } = await supabase.from('financial_years').select('*').eq('id', req.params.id).single()
+    if (!yr) return res.status(404).json({ error: 'Year not found' })
+    if (yr.is_active) return res.status(400).json({ error: 'Cannot delete the active year' })
+    if (yr.is_closed) return res.status(400).json({ error: 'Cannot delete a closed year' })
+
+    // Check if any data references this year
+    const [budgetCheck, incomeCheck] = await Promise.all([
+      supabase.from('budgets').select('id', { count: 'exact', head: true }).eq('spiritual_year', yr.label),
+      supabase.from('income_entries').select('id', { count: 'exact', head: true }).eq('spiritual_year', yr.label),
+    ])
+    if ((budgetCheck.count || 0) > 0 || (incomeCheck.count || 0) > 0) {
+      return res.status(400).json({ error: 'Cannot delete year with existing budget or income data' })
+    }
+
+    await supabase.from('financial_years').delete().eq('id', req.params.id)
+    res.json({ message: `Financial year ${yr.label} deleted` })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════
+// BUDGET EXCEL UPLOAD
+// ═══════════════════════════════════════════════════════════════
+
+// GET /api/treasury/budgets/template — download Excel template
+router.get('/budgets/template', authenticate, requireRole(...TREASURER), async (req, res) => {
+  try {
+    const { generateBudgetTemplate } = require('../lib/budgetParser')
+    const buffer = generateBudgetTemplate()
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', 'attachment; filename="mutcu-budget-template.xlsx"')
+    res.send(buffer)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/treasury/budgets/parse — parse uploaded Excel, return preview (no DB write)
+router.post('/budgets/parse', authenticate, requireRole(...TREASURER), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded. Please upload an Excel file (.xlsx or .xls).' })
+
+    const result = parseExcelBudget(req.file.buffer)
+    res.json({
+      rows: result.rows,
+      warnings: result.warnings,
+      columnMapping: result.columnMapping,
+      sheetName: result.sheetName,
+      totalRows: result.totalRows,
+      totalAmount: result.totalAmount,
+      message: `Parsed ${result.totalRows} budget rows from "${result.sheetName}"`,
+    })
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// POST /api/treasury/budgets/bulk-import — confirm and insert parsed rows into DB
+router.post('/budgets/bulk-import', authenticate, requireRole(...TREASURER), async (req, res) => {
+  try {
+    const { rows, spiritual_year, replace_existing = false } = req.body
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'No rows to import' })
+    }
+    if (!spiritual_year) return res.status(400).json({ error: 'spiritual_year is required' })
+
+    // Check year is not closed
+    const { data: yr } = await supabase.from('financial_years').select('is_closed').eq('label', spiritual_year).single()
+    if (yr?.is_closed) return res.status(400).json({ error: 'Cannot import budget into a closed financial year' })
+
+    // Optionally clear existing budgets for this year first
+    if (replace_existing) {
+      await supabase.from('budgets').delete().eq('spiritual_year', spiritual_year)
+    }
+
+    // Upsert all rows
+    const toInsert = rows.map(r => ({
+      spiritual_year,
+      ministry: r.ministry,
+      category: r.category || 'General',
+      allocated_amount: parseFloat(r.allocated_amount),
+      notes: r.notes || null,
+      created_by: req.user.id,
+      updated_by: req.user.id,
+      updated_at: new Date().toISOString(),
+    }))
+
+    const { data, error } = await supabase.from('budgets')
+      .upsert(toInsert, { onConflict: 'spiritual_year,ministry,category' })
+      .select()
+    if (error) throw error
+
+    // Audit log
+    await supabase.from('audit_logs').insert({
+      actor_id: req.user.id,
+      action: 'treasury.budget_import',
+      entity_type: 'budgets',
+      description: `Imported ${data.length} budget rows for ${spiritual_year} from Excel upload`,
+    }).then(() => {}).catch(() => {})
+
+    res.json({
+      imported: data.length,
+      message: `Successfully imported ${data.length} budget entries for ${spiritual_year}`,
+    })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
 
 // ═══════════════════════════════════════════════════════════════
 // BUDGETS
@@ -476,20 +684,33 @@ router.get('/reports/annual-summary', authenticate, requireRole(...CAN_VIEW), as
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// GET /api/treasury/spiritual-years — list all spiritual years with data
+// GET /api/treasury/spiritual-years — list all years (from financial_years table + any legacy data)
 router.get('/spiritual-years', authenticate, requireRole(...CAN_VIEW), async (req, res) => {
   try {
+    // Primary: from financial_years table (structured)
+    const { data: fyData } = await supabase.from('financial_years')
+      .select('label, is_active, is_closed').order('start_date', { ascending: false })
+
+    // Also collect any legacy year strings from data tables not in financial_years
     const [incomeRes, reqRes, budgetRes] = await Promise.all([
       supabase.from('income_entries').select('spiritual_year').not('spiritual_year', 'is', null),
       supabase.from('requisitions').select('spiritual_year').not('spiritual_year', 'is', null),
       supabase.from('budgets').select('spiritual_year').not('spiritual_year', 'is', null),
     ])
-    const years = [...new Set([
+
+    const fyLabels = (fyData || []).map(y => y.label)
+    const legacyYears = [...new Set([
       ...(incomeRes.data || []).map(r => r.spiritual_year),
       ...(reqRes.data || []).map(r => r.spiritual_year),
       ...(budgetRes.data || []).map(r => r.spiritual_year),
-    ])].filter(Boolean).sort().reverse()
-    res.json({ years })
+    ])].filter(y => y && !fyLabels.includes(y))
+
+    const years = [
+      ...(fyData || []).map(y => ({ label: y.label, is_active: y.is_active, is_closed: y.is_closed, managed: true })),
+      ...legacyYears.map(y => ({ label: y, is_active: false, is_closed: false, managed: false })),
+    ]
+
+    res.json({ years, labels: years.map(y => y.label) })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

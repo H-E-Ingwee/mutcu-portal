@@ -203,10 +203,7 @@ export default function Layout() {
                 </>
               )}
 
-              <NavItem to="/profile/edit" icon={UserCircle} label="My Profile" />
-            </>
-          )}
-        </nav>
+              
 
         {/* User */}
         <div className="p-3 border-t border-white/10">

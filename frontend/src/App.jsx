@@ -56,6 +56,7 @@ import BudgetManager from './pages/treasurer/BudgetManager'
 import IncomeLedger from './pages/treasurer/IncomeLedger'
 import GeneralLedger from './pages/treasurer/GeneralLedger'
 import FinancialReports from './pages/treasurer/FinancialReports'
+import YearManager from './pages/treasurer/YearManager'
 
 function Spinner() {
   return (
@@ -133,6 +134,7 @@ function AppRoutes() {
         <Route path="treasurer/income" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary']}><IncomeLedger /></ProtectedRoute>} />
         <Route path="treasurer/ledger" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary']}><GeneralLedger /></ProtectedRoute>} />
         <Route path="treasurer/reports" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary']}><FinancialReports /></ProtectedRoute>} />
+        <Route path="treasurer/years" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin']}><YearManager /></ProtectedRoute>} />
 
         {/* NC Panel */}
         <Route path="nc" element={<ProtectedRoute roles={NC_ROLES}><NCDashboard /></ProtectedRoute>} />
