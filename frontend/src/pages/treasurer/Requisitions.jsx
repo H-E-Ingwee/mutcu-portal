@@ -441,14 +441,22 @@ export default function Requisitions() {
                   </div>
                 )}
 
-                
+                <div className="flex flex-wrap gap-2">
+                  {selected.status === 'pending' && canEndorse && (
                     <button onClick={() => endorseRequisition(selected.id)} disabled={saving} className="btn-primary btn-sm">
                       <Check size={14} />Endorse as Chairperson
                     </button>
                   )}
                   {/* Review — CU Treasurer only */}
                   {['endorsed', 'pending'].includes(selected.status) && isTreasurer && (
-                    <button onClick={() => { setReviewForm({ status: '', total_approved: selected.total_requested, review_notes: '' }); setShowReview(true) }} className="btn-outline btn-sm">
+                    <button onClick={() => {
+                      setReviewForm({
+                        status: '',
+                        total_approved: selected.total_requested,
+                        review_notes: ''
+                      });
+                      setShowReview(true);
+                    }} className="btn-outline btn-sm">
                       <Eye size={14} />Review & Set Amount
                     </button>
                   )}
