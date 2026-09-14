@@ -187,7 +187,6 @@ export default function Layout() {
               )}
 
               {/* Secretary */}
-              
               {isAdmin && isAdmin() && (
                 <>
                   <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Administration</div>
@@ -202,8 +201,9 @@ export default function Layout() {
                   <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
                 </>
               )}
-
-              
+            </>
+          )}
+        </nav>
 
         {/* User */}
         <div className="p-3 border-t border-white/10">
