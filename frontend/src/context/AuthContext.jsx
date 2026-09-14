@@ -8,7 +8,7 @@ const EC_COORDINATOR_ROLES = [
   'prayer_coordinator', 'music_coordinator', 'missions_coordinator',
   'bible_study_coordinator', 'discipleship_coordinator',
   'tech_media_coordinator', 'creative_arts_coordinator',
-  '1st_vp', '2nd_vp', 'vice_secretary', 'treasurer',
+  '1st_vp', '2nd_vp', 'vice_secretary', 'cu_treasurer',
 ]
 
 // All ministry secretary roles (committee-level)

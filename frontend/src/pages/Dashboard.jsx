@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../lib/api'
 import {
@@ -110,8 +110,7 @@ function PendingMemberSkeleton({ user }) {
 }
 
 export default function Dashboard() {
-  const { user, isAdmin, isSecretary, isNC, canManageRequisitions } = useAuth()
-  const [cycle, setCycle] = useState(null)
+  
   const [stats, setStats] = useState({ total_members: 0, active_members: 0, pending_members: 0, ministry_count: 0 })
   const [currentEC, setCurrentEC] = useState([])
   const [announcements, setAnnouncements] = useState([])

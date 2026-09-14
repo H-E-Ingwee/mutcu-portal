@@ -33,9 +33,7 @@ export default function Login() {
         navigate('/verify-email', { replace: true })
       } else if (!data.user.profile_complete) {
         navigate('/profile/complete', { replace: true })
-      } else {
-        navigate('/dashboard', { replace: true })
-      }
+      
     } catch (err) {
       const code = err.response?.data?.code
       const msg  = err.response?.data?.error || 'Login failed. Please check your credentials.'
