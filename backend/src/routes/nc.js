@@ -206,8 +206,9 @@ router.post('/publish', authenticate, requireRole('nc_chair', 'nc_secretary', 'e
     // Verify cycle exists and is in vetting stage
     const { data: cycle } = await supabase.from('nomination_cycles').select('status,title').eq('id', cycle_id).single();
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
-    if (!['vetting', 'nominees_published'].includes(cycle.status)) {
-      return res.status(400).json({ error: `Cannot publish from status: ${cycle.status}. Cycle must be in vetting stage.` });
+    // Allow publish/republish from vetting or any later stage (NC Chair may need to republish)
+    if (!['vetting', 'nominees_published', 'objection_period', 'pre_agm'].includes(cycle.status)) {
+      return res.status(400).json({ error: `Cannot publish from status: ${cycle.status}. Cycle must be in vetting or a later stage.` });
     }
 
     // Get all approved vetting decisions

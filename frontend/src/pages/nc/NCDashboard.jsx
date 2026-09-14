@@ -186,7 +186,9 @@ export default function NCDashboard() {
   }
 
   const myNCRole = ncMembers?.find(m => m.user_id === user?.id)?.nc_role
-  const roleLabel = myNCRole === 'chairperson' ? '🏛️ NC Chairperson' : myNCRole === 'secretary' ? '📋 NC Secretary' : '👁️ NC Member (View Only)'
+  // Fall back to system role if not found in nc_members table
+  const effectiveNCRole = myNCRole || (user?.role === 'nc_chair' ? 'chairperson' : user?.role === 'nc_secretary' ? 'secretary' : user?.role === 'nc_member' ? 'member' : null)
+  const roleLabel = effectiveNCRole === 'chairperson' ? '🏛️ NC Chairperson' : effectiveNCRole === 'secretary' ? '📋 NC Secretary' : effectiveNCRole === 'member' ? '👁️ NC Member (View Only)' : ''
 
   // Accurate stats
   const totalPositions = positions?.length || 0
@@ -210,10 +212,32 @@ export default function NCDashboard() {
           <h1 className="page-title">NC Dashboard</h1>
           <p className="page-subtitle">
             {cycle.title} — <span className={`badge ${statusColor[cycle.status] || 'badge-gray'}`}>{cycleStatusLabel[cycle.status] || cycle.status}</span>
-            {myNCRole && <span className="ml-2 text-xs text-gray-400">{roleLabel}</span>}
+            {effectiveNCRole && <span className="ml-2 text-xs text-gray-400">{roleLabel}</span>}
           </p>
         </div>
-        {canAct && cycle.status === 'commissioned' && !cycle.nc_dissolution_date && (
+        
+            <div className="flex gap-2 flex-wrap">
+          <button onClick={printFullReport} disabled={printing} className="btn-outline btn-sm">
+            <Printer size={14} />{printing ? 'Generating...' : 'Full Report'}
+          </button>
+          <Link to="/nc/suggestions" className="btn-outline btn-sm relative">
+            <MessageSquare size={14} />Suggestions
+            {suggestionCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-orange text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{suggestionCount}</span>}
+          </Link>
+          {/* Objections link — always visible to NC Chair/Secretary/Admin */}
+          {(canAct || ['ec_admin', 'super_admin'].includes(user?.role)) && (
+            <Link to="/nc/objections" className="btn-outline btn-sm relative">
+              <Shield size={14} />Objections
+              {objectionCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{objectionCount}</span>}
+            </Link>
+          )}
+          {/* Publish / Republish Nominees — visible from vetting stage onwards */}
+          {(canAct || ['ec_admin', 'super_admin'].includes(user?.role)) && ['vetting', 'nominees_published', 'objection_period', 'pre_agm'].includes(cycle.status) && (
+            <button onClick={openPublishModal} disabled={publishing} className="btn-primary btn-sm">
+              <CheckCircle size={14} />{publishing ? 'Publishing...' : cycle.status === 'vetting' ? 'Publish Nominees' : 'Republish Nominees'}
+            </button>
+          )}
+          {(canAct || ['ec_admin', 'super_admin'].includes(user?.role)) && cycle.status === 'commissioned' && !cycle.nc_dissolution_date && (
             <button onClick={dissolveNC} disabled={dissolving} className="btn-outline btn-sm text-red border-red/30 hover:bg-red/5">
               <Shield size={14} />{dissolving ? 'Dissolving...' : 'Dissolve NC'}
             </button>
@@ -225,6 +249,7 @@ export default function NCDashboard() {
             </button>
           )}
         </div>
+      </div>
 
       {/* Deadline countdowns */}
       {cycle.status === 'vetting' && (
