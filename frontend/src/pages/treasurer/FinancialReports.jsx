@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import { FileText, Download, Share2, BarChart3, TrendingUp, DollarSign, BookOpen, Printer } from 'lucide-react'
+import AIFinancialPanel from '../../components/treasury/AIFinancialPanel'
 
 const REPORTS = [
   {
@@ -224,8 +225,7 @@ export default function FinancialReports() {
         ))}
       </div>
 
-      {/* Instructions */}
-      <div className="card p-5 mt-5 bg-navy/5 border border-navy/10">
+      <div className="card p-5 mt-6">
         <h3 className="font-montserrat font-bold text-navy text-sm mb-3">📋 How to Use These Reports</h3>
         <div className="space-y-2 text-sm text-gray-600">
           <div className="flex items-start gap-2">

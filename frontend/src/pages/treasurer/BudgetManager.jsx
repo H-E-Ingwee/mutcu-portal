@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, Edit2, Save, X, TrendingUp, AlertTriangle, CheckCircle, Upload, Download, FileSpreadsheet, Eye, RefreshCw } from 'lucide-react'
+import AIBudgetAdvisor from '../../components/treasury/AIBudgetAdvisor'
 
 const MINISTRIES = [
   'Prayer Ministry', 'Music Ministry', 'Missions & Evangelism Ministry',
@@ -472,8 +473,7 @@ export default function BudgetManager() {
         </div>
       )}
 
-      {/* ── Budget vs Actual Table (always visible) ── */}
-      {vsActual.length > 0 && (
+      
         <div className="card mb-5">
           <div className="card-header"><h2 className="font-montserrat font-bold text-navy text-sm">Budget vs Actual — {selectedYear}</h2></div>
           <div className="overflow-x-auto">

@@ -3,7 +3,9 @@ import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
-import { Plus, FileText, Search, X, Check, Printer, Clock, CheckCircle, XCircle, Send, Eye, DollarSign } from 'lucide-react'
+import { Plus, FileText, Search, X, Check, Printer, Clock, CheckCircle, XCircle, Send, Eye, DollarSign, Sparkles } from 'lucide-react'
+import AIRequisitionReview from '../../components/treasury/AIRequisitionReview'
+import AIAnomalyBadge from '../../components/treasury/AIAnomalyBadge'
 
 const STATUS_CONFIG = {
   pending:            { label: 'Pending',             color: 'badge-gray',   icon: Clock },
@@ -344,10 +346,7 @@ export default function Requisitions() {
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-navy text-sm truncate">{r.title}</div>
                     <div className="text-xs text-gray-400">{r.requisition_number} · {r.ministry || 'General'}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`badge ${cfg.color} text-xs`}>{cfg.label}</span>
-                      <span className="text-xs text-gray-500">KES {parseFloat(r.total_requested).toLocaleString()}</span>
-                    </div>
+                    
                   </div>
                 </div>
               )
@@ -442,10 +441,7 @@ export default function Requisitions() {
                   </div>
                 )}
 
-                {/* Action buttons — role-based */}
-                <div className="flex gap-2 flex-wrap">
-                  {/* Endorse — EC coordinators/VPs only (NOT cu_secretary) */}
-                  {selected.status === 'pending' && canEndorse && (
+                
                     <button onClick={() => endorseRequisition(selected.id)} disabled={saving} className="btn-primary btn-sm">
                       <Check size={14} />Endorse as Chairperson
                     </button>
