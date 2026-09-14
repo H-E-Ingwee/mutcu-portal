@@ -38,7 +38,6 @@ function PendingMemberSkeleton({ user }) {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-lg w-full space-y-4">
-        {/* Pending notice */}
         <div className="card p-6 border-l-4 border-orange">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 bg-orange/10 rounded-full flex items-center justify-center flex-shrink-0">
@@ -64,7 +63,6 @@ function PendingMemberSkeleton({ user }) {
           </div>
         </div>
 
-        {/* Limited access preview */}
         <div className="card p-5">
           <h3 className="font-montserrat font-bold text-navy text-sm mb-3">Available While Pending</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -79,7 +77,6 @@ function PendingMemberSkeleton({ user }) {
           </div>
         </div>
 
-        {/* Locked features preview */}
         <div className="card p-5">
           <h3 className="font-montserrat font-bold text-gray-400 text-sm mb-3">Available After Approval</h3>
           <div className="grid grid-cols-3 gap-2 opacity-40 pointer-events-none select-none">
@@ -110,20 +107,27 @@ function PendingMemberSkeleton({ user }) {
 }
 
 export default function Dashboard() {
-  
+  const { user, isAdmin, isSecretary, isNC, canManageRequisitions } = useAuth()
+  const navigate = useNavigate()
+  const [cycle, setCycle] = useState(null)
   const [stats, setStats] = useState({ total_members: 0, active_members: 0, pending_members: 0, ministry_count: 0 })
   const [currentEC, setCurrentEC] = useState([])
   const [announcements, setAnnouncements] = useState([])
   const [ministryContent, setMinistryContent] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Role-based redirect — send privileged roles to their dedicated dashboards
+  useEffect(() => {
+    if (!user) return
+    if (user.role === 'cu_treasurer') navigate('/treasurer', { replace: true })
+    else if (user.role === 'nc_chair') navigate('/nc', { replace: true })
+  }, [user])
+
   const photoUrl = user?.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
 
   const isPending = user?.enrollment_status === 'pending'
 
-  // Show skeleton for pending members
-  if (isPending) return <PendingMemberSkeleton user={user} />
-
+  // Show skeleton for pending members (must be after all hooks)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -134,7 +138,6 @@ export default function Dashboard() {
         const annRes = await api.get('/announcements')
         setAnnouncements((annRes.data?.announcements || []).slice(0, 3))
       } catch {}
-      // Load ministry content for user's ministries
       if (user?.primary_ministry || user?.secondary_ministry) {
         try {
           const mcRes = await api.get('/ministry-content/my')
@@ -150,15 +153,17 @@ export default function Dashboard() {
       }
       setLoading(false)
     }
-    fetchData()
+    if (!isPending) fetchData()
+    else setLoading(false)
   }, [])
+
+  if (isPending) return <PendingMemberSkeleton user={user} />
 
   const cycleStatusLabel = { setup: 'Setup', prayer_period: 'Prayer Period', nominations_open: 'Nominations Open', vetting: 'NC Vetting', nominees_published: 'Nominees Published', objection_period: 'Objection Period', pre_agm: 'Pre-AGM', commissioned: 'Commissioned' }
   const cycleStatusColor = { nominations_open: 'badge-green', nominees_published: 'badge-teal', objection_period: 'badge-red', vetting: 'badge-orange', commissioned: 'badge-navy' }
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
 
-  // User's ministries
   const userMinistries = [user?.primary_ministry, user?.secondary_ministry].filter(Boolean)
   const ministryMeetings = ministryContent.filter(c => c.content_type === 'meeting_schedule')
   const ministryAnnouncements = ministryContent.filter(c => c.content_type === 'announcement')
