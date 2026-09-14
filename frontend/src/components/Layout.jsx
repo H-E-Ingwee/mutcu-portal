@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
   MessageSquare, ClipboardList, Megaphone, History, Send, X,
-  CalendarDays, ShieldAlert, DollarSign, Church, Lock, Clock
+  CalendarDays, ShieldAlert, DollarSign, Church, Lock, Clock, TrendingUp
 } from 'lucide-react'
 
 // Pending member locked page component
@@ -187,18 +187,7 @@ export default function Layout() {
               )}
 
               {/* Secretary */}
-              {isSecretary && isSecretary() && (
-                <>
-                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Secretary</div>
-                  <NavItem to="/secretary/members" icon={Users} label="Member Register" />
-                  <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" badge={pendingChangesCount} />
-                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
-                </>
-              )}
-
               
-
-              {/* Admin */}
               {isAdmin && isAdmin() && (
                 <>
                   <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Administration</div>

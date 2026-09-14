@@ -1,49 +1,101 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
-import { DollarSign, Clock, CheckCircle, XCircle, FileText, TrendingUp, AlertCircle } from 'lucide-react'
+import { DollarSign, Clock, CheckCircle, FileText, TrendingUp, AlertCircle, TrendingDown, BarChart3, BookOpen, User, ArrowUpRight, ArrowDownRight, AlertTriangle } from 'lucide-react'
 
 export default function TreasurerDashboard() {
   const [summary, setSummary] = useState(null)
   const [pending, setPending] = useState([])
+  const [balance, setBalance] = useState(null)
+  const [vsActual, setVsActual] = useState([])
   const [loading, setLoading] = useState(true)
+  const [currentYear] = useState(`${new Date().getFullYear()}/${new Date().getFullYear() + 1}`)
 
   useEffect(() => {
     Promise.all([
       api.get('/requisitions/stats/summary'),
       api.get('/requisitions?status=endorsed&limit=5'),
-    ]).then(([sumRes, pendRes]) => {
+      api.get(`/treasury/balance?spiritual_year=${currentYear}`),
+      api.get(`/treasury/budgets/vs-actual?spiritual_year=${currentYear}`),
+    ]).then(([sumRes, pendRes, balRes, vaRes]) => {
       setSummary(sumRes.data.summary)
       setPending(pendRes.data.requisitions || [])
+      setBalance(balRes.data)
+      setVsActual((vaRes.data.vs_actual || []).filter(m => m.over_budget || m.utilization >= 80).slice(0, 4))
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
 
-  const stats = [
-    { label: 'Total Submitted', value: summary?.total_submitted || 0, icon: FileText, color: 'text-navy', bg: 'bg-navy/10' },
-    { label: 'Total Requested', value: `KES ${(summary?.total_requested || 0).toLocaleString()}`, icon: TrendingUp, color: 'text-orange', bg: 'bg-orange/10' },
-    { label: 'Total Approved', value: `KES ${(summary?.total_approved || 0).toLocaleString()}`, icon: CheckCircle, color: 'text-teal', bg: 'bg-teal/10' },
-    { label: 'Total Disbursed', value: `KES ${(summary?.total_disbursed || 0).toLocaleString()}`, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-100' },
-  ]
-
-  const statusBreakdown = summary?.by_status || {}
+  const overBudget = vsActual.filter(m => m.over_budget)
 
   return (
     <div>
+      {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Treasurer Dashboard</h1>
-          <p className="page-subtitle">Financial overview and requisition management</p>
+          <p className="page-subtitle">Financial overview — {currentYear}</p>
         </div>
-        <Link to="/treasurer/requisitions" className="btn-primary btn-sm">
-          <FileText size={14} />All Requisitions
-        </Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link to="/treasurer/profile" className="btn-outline btn-sm"><User size={14} /> My Profile</Link>
+          <Link to="/treasurer/reports" className="btn-primary btn-sm"><BarChart3 size={14} /> Reports</Link>
+        </div>
       </div>
 
-      {/* Stats */}
+      {/* Fund Balance Hero */}
+      {balance && (
+        <div className="bg-gradient-to-r from-navy to-[#0a0060] rounded-2xl p-6 mb-6 shadow-lg">
+          <div className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">Current Fund Balance — {currentYear}</div>
+          <div className={`text-4xl font-montserrat font-bold mb-4 ${parseFloat(balance.balance) >= 0 ? 'text-orange' : 'text-red'}`}>
+            KES {parseFloat(balance.balance || 0).toLocaleString()}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-white/10 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <ArrowUpRight size={14} className="text-teal" />
+                <span className="text-white/60 text-xs font-semibold">Total Income</span>
+              </div>
+              <div className="text-teal font-montserrat font-bold text-lg">KES {parseFloat(balance.total_income || 0).toLocaleString()}</div>
+            </div>
+            <div className="bg-white/10 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <ArrowDownRight size={14} className="text-orange" />
+                <span className="text-white/60 text-xs font-semibold">Total Disbursed</span>
+              </div>
+              <div className="text-orange font-montserrat font-bold text-lg">KES {parseFloat(balance.total_expenses || 0).toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Over-budget Alerts */}
+      {overBudget.length > 0 && (
+        <div className="card p-4 mb-5 border-l-4 border-red bg-red/5">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={16} className="text-red" />
+            <span className="font-montserrat font-bold text-red text-sm">{overBudget.length} Ministry Over Budget</span>
+          </div>
+          <div className="space-y-1">
+            {overBudget.map(m => (
+              <div key={m.ministry} className="flex items-center justify-between text-sm">
+                <span className="text-navy font-semibold">{m.ministry}</span>
+                <span className="text-red font-bold">KES {Math.abs(m.remaining).toLocaleString()} over</span>
+              </div>
+            ))}
+          </div>
+          <Link to="/treasurer/budget" className="text-xs text-red font-semibold mt-2 inline-block hover:underline">View Budget Manager →</Link>
+        </div>
+      )}
+
+      {/* Requisition Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {stats.map((s, i) => (
+        {[
+          { label: 'Total Requisitions', value: summary?.total_submitted || 0, icon: FileText, color: 'text-navy', bg: 'bg-navy/10' },
+          { label: 'Total Requested', value: `KES ${(summary?.total_requested || 0).toLocaleString()}`, icon: TrendingUp, color: 'text-orange', bg: 'bg-orange/10' },
+          { label: 'Total Approved', value: `KES ${(summary?.total_approved || 0).toLocaleString()}`, icon: CheckCircle, color: 'text-teal', bg: 'bg-teal/10' },
+          { label: 'Total Disbursed', value: `KES ${(summary?.total_disbursed || 0).toLocaleString()}`, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-100' },
+        ].map((s, i) => (
           <div key={i} className="card p-4">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg}`}>
@@ -58,8 +110,26 @@ export default function TreasurerDashboard() {
         ))}
       </div>
 
+      {/* Quick Navigation */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {[
+          { to: '/treasurer/requisitions', icon: FileText, label: 'Requisitions', color: 'bg-orange/10 text-orange', desc: 'Review & disburse' },
+          { to: '/treasurer/income', icon: TrendingUp, label: 'Income Ledger', color: 'bg-teal/10 text-teal', desc: 'Record income' },
+          { to: '/treasurer/budget', icon: BarChart3, label: 'Budget Manager', color: 'bg-navy/10 text-navy', desc: 'Set allocations' },
+          { to: '/treasurer/ledger', icon: BookOpen, label: 'General Ledger', color: 'bg-purple-100 text-purple-600', desc: 'Full transactions' },
+        ].map((item, i) => (
+          <Link key={i} to={item.to} className="card p-4 hover:shadow-md transition-all hover:border-orange/20 border border-transparent">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${item.color}`}>
+              <item.icon size={18} />
+            </div>
+            <div className="font-montserrat font-bold text-navy text-sm">{item.label}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{item.desc}</div>
+          </Link>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Status breakdown */}
+        {/* Requisition Status Breakdown */}
         <div className="card">
           <div className="card-header"><h2 className="font-montserrat font-bold text-navy text-sm">Requisitions by Status</h2></div>
           <div className="card-body space-y-2">
@@ -72,12 +142,12 @@ export default function TreasurerDashboard() {
               rejected: { label: 'Rejected', color: 'bg-red', text: 'text-white' },
               disbursed: { label: 'Disbursed', color: 'bg-green-500', text: 'text-white' },
             }).map(([status, cfg]) => {
-              const count = statusBreakdown[status] || 0
+              const count = summary?.by_status?.[status] || 0
               const total = summary?.total_submitted || 1
               const pct = Math.round(count / total * 100)
               return (
                 <div key={status} className="flex items-center gap-3">
-                  <div className="w-28 text-xs text-gray-500 flex-shrink-0">{cfg.label}</div>
+                  <div className="w-32 text-xs text-gray-500 flex-shrink-0">{cfg.label}</div>
                   <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
                     <div className={`h-full ${cfg.color} rounded-full flex items-center justify-end pr-2 transition-all`} style={{ width: `${Math.max(pct, count > 0 ? 8 : 0)}%` }}>
                       {count > 0 && <span className={`text-xs font-bold ${cfg.text}`}>{count}</span>}
@@ -90,7 +160,7 @@ export default function TreasurerDashboard() {
           </div>
         </div>
 
-        {/* Pending review */}
+        {/* Pending Review */}
         <div className="card">
           <div className="card-header">
             <h2 className="font-montserrat font-bold text-navy text-sm">
@@ -123,7 +193,35 @@ export default function TreasurerDashboard() {
           </div>
         </div>
 
-        {/* Ministry breakdown */}
+        {/* Budget Utilization Alerts */}
+        {vsActual.length > 0 && (
+          <div className="card lg:col-span-2">
+            <div className="card-header">
+              <h2 className="font-montserrat font-bold text-navy text-sm">Budget Utilization Alerts</h2>
+              <Link to="/treasurer/budget" className="btn-outline btn-sm text-xs">Full Budget</Link>
+            </div>
+            <div className="card-body space-y-3">
+              {vsActual.map(m => (
+                <div key={m.ministry} className="flex items-center gap-3">
+                  <div className="w-40 text-sm font-semibold text-navy truncate flex-shrink-0">{m.ministry.replace(' Ministry', '')}</div>
+                  <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${m.over_budget ? 'bg-red' : m.utilization >= 90 ? 'bg-orange' : 'bg-yellow-400'}`}
+                      style={{ width: `${Math.min(m.utilization || 0, 100)}%` }} />
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`text-xs font-bold w-10 text-right ${m.over_budget ? 'text-red' : 'text-orange'}`}>{m.utilization}%</span>
+                    {m.over_budget && <AlertTriangle size={13} className="text-red" />}
+                  </div>
+                  <div className={`text-xs font-semibold w-28 text-right flex-shrink-0 ${m.over_budget ? 'text-red' : 'text-orange'}`}>
+                    {m.over_budget ? `KES ${Math.abs(m.remaining).toLocaleString()} over` : `KES ${m.remaining.toLocaleString()} left`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ministry Spending */}
         {summary?.by_ministry && Object.keys(summary.by_ministry).length > 0 && (
           <div className="card lg:col-span-2">
             <div className="card-header"><h2 className="font-montserrat font-bold text-navy text-sm">Spending by Ministry</h2></div>

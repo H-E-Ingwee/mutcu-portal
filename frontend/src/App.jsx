@@ -51,6 +51,11 @@ import AdminDisciplinary from './pages/admin/AdminDisciplinary'
 
 import Requisitions from './pages/treasurer/Requisitions'
 import TreasurerDashboard from './pages/treasurer/TreasurerDashboard'
+import TreasurerProfile from './pages/treasurer/TreasurerProfile'
+import BudgetManager from './pages/treasurer/BudgetManager'
+import IncomeLedger from './pages/treasurer/IncomeLedger'
+import GeneralLedger from './pages/treasurer/GeneralLedger'
+import FinancialReports from './pages/treasurer/FinancialReports'
 
 function Spinner() {
   return (
@@ -123,6 +128,11 @@ function AppRoutes() {
         <Route path="nominations/nominees" element={<Nominees />} />
         <Route path="treasurer" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary',...ALL_SECRETARY_ROLES,'1st_vp','2nd_vp','vice_secretary','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','interim_chair','interim_secretary','interim_treasurer']}><TreasurerDashboard /></ProtectedRoute>} />
         <Route path="treasurer/requisitions" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary',...ALL_SECRETARY_ROLES,'1st_vp','2nd_vp','vice_secretary','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','interim_chair','interim_secretary','interim_treasurer']}><Requisitions /></ProtectedRoute>} />
+        <Route path="treasurer/profile" element={<ProtectedRoute roles={['cu_treasurer']}><TreasurerProfile /></ProtectedRoute>} />
+        <Route path="treasurer/budget" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary']}><BudgetManager /></ProtectedRoute>} />
+        <Route path="treasurer/income" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary']}><IncomeLedger /></ProtectedRoute>} />
+        <Route path="treasurer/ledger" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary']}><GeneralLedger /></ProtectedRoute>} />
+        <Route path="treasurer/reports" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary']}><FinancialReports /></ProtectedRoute>} />
 
         {/* NC Panel */}
         <Route path="nc" element={<ProtectedRoute roles={NC_ROLES}><NCDashboard /></ProtectedRoute>} />

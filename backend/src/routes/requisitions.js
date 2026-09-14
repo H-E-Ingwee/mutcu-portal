@@ -260,12 +260,29 @@ router.put('/:id/approve', authenticate, requireRole(...APPROVAL_ROLES), async (
 // PUT /api/requisitions/:id/disburse — ONLY CU Treasurer disburses
 router.put('/:id/disburse', authenticate, requireRole(...TREASURER_ROLES), async (req, res) => {
   try {
+    const { disbursed_to, disbursement_method = 'Cash', disbursement_reference, disbursement_notes } = req.body;
     const { data, error } = await supabase.from('requisitions').update({
       status: 'disbursed',
       disbursed_at: new Date().toISOString(),
+      disbursed_to: disbursed_to || null,
+      disbursement_method,
+      disbursement_reference: disbursement_reference || null,
+      disbursement_notes: disbursement_notes || null,
       updated_at: new Date().toISOString(),
     }).eq('id', req.params.id).select('*, requester:requested_by(id,name)').single();
     if (error) throw error;
+
+    // Auto-create disbursement receipt
+    await supabase.from('disbursement_receipts').insert({
+      requisition_id: data.id,
+      amount_disbursed: parseFloat(data.total_approved || data.total_requested || 0),
+      disbursed_to: disbursed_to || null,
+      disbursement_method,
+      reference_number: disbursement_reference || null,
+      notes: disbursement_notes || null,
+      disbursed_by: req.user.id,
+    }).then(() => {}).catch(e => console.error('[RECEIPT ERROR]', e.message));
+
     if (data.requester?.id) {
       await supabase.from('mutcu_notifications').insert({
         user_id: data.requester.id,
@@ -274,7 +291,7 @@ router.put('/:id/disburse', authenticate, requireRole(...TREASURER_ROLES), async
         type: 'success', category: 'general', link: '/treasurer/requisitions',
       }).then(() => {}).catch(() => {});
     }
-    res.json({ requisition: data, message: 'Requisition marked as disbursed' });
+    res.json({ requisition: data, message: 'Requisition disbursed and receipt generated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
