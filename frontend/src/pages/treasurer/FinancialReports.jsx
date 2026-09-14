@@ -215,7 +215,7 @@ export default function FinancialReports() {
         ))}
       </div>
 
-      
+      <div className="mt-8">
         <h3 className="font-montserrat font-bold text-navy text-sm mb-3">📋 How to Use These Reports</h3>
         <div className="space-y-2 text-sm text-gray-600">
           <div className="flex items-start gap-2">
