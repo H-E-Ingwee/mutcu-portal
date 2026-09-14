@@ -18,19 +18,7 @@ export default function IncomeLedger() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ source: '', category: 'Offering', amount: '', date: new Date().toISOString().split('T')[0], notes: '', received_by: '' })
 
-  useEffect(() => {
-    api.get('/treasury/spiritual-years').then(r => {
-      const yrs = r.data.years || []
-      const currentYear = `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`
-      if (!yrs.includes(currentYear)) yrs.unshift(currentYear)
-      setYears(yrs)
-      setSelectedYear(yrs[0] || currentYear)
-    }).catch(() => {
-      const currentYear = `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`
-      setYears([currentYear])
-      setSelectedYear(currentYear)
-    })
-  }, [])
+  
 
   const load = async (yr = selectedYear, pg = 1) => {
     if (!yr) return

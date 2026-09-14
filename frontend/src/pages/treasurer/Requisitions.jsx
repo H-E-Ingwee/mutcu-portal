@@ -194,7 +194,7 @@ export default function Requisitions() {
   const [saving, setSaving] = useState(false)
   const [members, setMembers] = useState([])
 
-  const TREASURER_ROLES = ['cu_treasurer', 'super_admin']
+  const TREASURER_ROLES = ['cu_treasurer', 'super_admin', 'ec_admin']
   const APPROVAL_ROLES = ['ec_admin', 'super_admin']
   const ENDORSE_ROLES = ['ec_admin', 'super_admin', '1st_vp', '2nd_vp', 'music_coordinator', 'creative_arts_coordinator', 'tech_media_coordinator', 'prayer_coordinator', 'missions_coordinator', 'bible_study_coordinator', 'discipleship_coordinator', 'interim_chair']
   const VIEW_ALL_ROLES = ['cu_treasurer', 'ec_admin', 'super_admin', 'cu_secretary']
@@ -442,6 +442,7 @@ export default function Requisitions() {
                 )}
 
                 <div className="flex flex-wrap gap-2">
+                  {/* Endorse — Ministry chairperson / designated approvers */}
                   {selected.status === 'pending' && canEndorse && (
                     <button onClick={() => endorseRequisition(selected.id)} disabled={saving} className="btn-primary btn-sm">
                       <Check size={14} />Endorse as Chairperson
@@ -449,14 +450,7 @@ export default function Requisitions() {
                   )}
                   {/* Review — CU Treasurer only */}
                   {['endorsed', 'pending'].includes(selected.status) && isTreasurer && (
-                    <button onClick={() => {
-                      setReviewForm({
-                        status: '',
-                        total_approved: selected.total_requested,
-                        review_notes: ''
-                      });
-                      setShowReview(true);
-                    }} className="btn-outline btn-sm">
+                    <button onClick={() => { setReviewForm({ status: '', total_approved: selected.total_requested, review_notes: '' }); setShowReview(true) }} className="btn-outline btn-sm">
                       <Eye size={14} />Review & Set Amount
                     </button>
                   )}

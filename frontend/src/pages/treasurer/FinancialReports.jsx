@@ -55,17 +55,7 @@ export default function FinancialReports() {
   const [loadingBalance, setLoadingBalance] = useState(false)
 
   useEffect(() => {
-    api.get('/treasury/spiritual-years').then(r => {
-      const yrs = r.data.years || []
-      const currentYear = `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`
-      if (!yrs.includes(currentYear)) yrs.unshift(currentYear)
-      setYears(yrs)
-      setSelectedYear(yrs[0] || currentYear)
-    }).catch(() => {
-      const currentYear = `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`
-      setYears([currentYear])
-      setSelectedYear(currentYear)
-    })
+    
   }, [])
 
   useEffect(() => {
@@ -157,7 +147,7 @@ export default function FinancialReports() {
         <div className="flex gap-2 flex-wrap">
           <select className="form-select text-sm py-1.5" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
             <option value="">All Years</option>
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
+            
           </select>
         </div>
       </div>
@@ -225,7 +215,7 @@ export default function FinancialReports() {
         ))}
       </div>
 
-      <div className="card p-5 mt-6">
+      
         <h3 className="font-montserrat font-bold text-navy text-sm mb-3">📋 How to Use These Reports</h3>
         <div className="space-y-2 text-sm text-gray-600">
           <div className="flex items-start gap-2">

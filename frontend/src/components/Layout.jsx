@@ -186,8 +186,7 @@ export default function Layout() {
                 </>
               )}
 
-              {/* Secretary */}
-              {isAdmin && isAdmin() && (
+              
                 <>
                   <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Administration</div>
                   <NavItem to="/admin" icon={Settings} label="Admin Dashboard" />
@@ -201,12 +200,10 @@ export default function Layout() {
                   <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
                 </>
               )}
-            </>
-          )}
-        </nav>
 
-        {/* User */}
-        <div className="p-3 border-t border-white/10">
+              
+
+        
           <div className="flex items-center gap-3 px-3 py-2">
             <img src={photoUrl} alt={user?.name} className="w-8 h-8 rounded-full object-cover border-2 border-orange/50" />
             <div className="flex-1 min-w-0">
