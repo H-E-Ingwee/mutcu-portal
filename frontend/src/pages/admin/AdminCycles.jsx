@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Plus, ChevronRight, Play, Settings, Eye } from 'lucide-react'
+import { Plus, ChevronRight, Play, Settings, Eye, Trash2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 const STATUS_ORDER = ['setup','prayer_period','nominations_open','vetting','nominees_published','objection_period','pre_agm','commissioned']
@@ -59,6 +59,23 @@ export default function AdminCycles() {
       await api.post(`/admin/cycles/${id}/commission`)
       toast.success('New EC commissioned!')
       setCycles(prev => prev.map(c => c.id === id ? {...c, status: 'commissioned'} : c))
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
+  }
+
+  const deleteData = async (c) => {
+    if (!window.confirm(`Delete ALL nomination data for "${c.title}"?\n\nThis will permanently delete:\n• All nominations submitted\n• All vetting decisions\n• All published nominees\n• All objections\n• All NC member records\n\nThe cycle itself will remain. This CANNOT be undone.`)) return
+    try {
+      await api.delete(`/nc/cycle/${c.id}/all-data`)
+      toast.success('All nomination data deleted')
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
+  }
+
+  const deleteCycle = async (c) => {
+    if (!window.confirm(`Permanently delete the entire cycle "${c.title}" and ALL its data?\n\nThis CANNOT be undone.`)) return
+    try {
+      await api.delete(`/nc/cycle/${c.id}`)
+      setCycles(prev => prev.filter(x => x.id !== c.id))
+      toast.success(`Cycle "${c.title}" deleted`)
     } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
   }
 
@@ -178,14 +195,7 @@ export default function AdminCycles() {
                       Appoint NC
                     </Link>
                   )}
-                  {/* Only full admins can commission */}
-                  {isAdmin && c.status === 'pre_agm' && (
-                    <button onClick={() => commission(c.id)} className="btn-teal btn-sm">Commission EC</button>
-                  )}
-                  {/* Read-only: just a view link */}
-                  {isReadOnly && (
-                    <span className="text-xs text-gray-400 italic">Read-only access</span>
-                  )}
+                  
                 </div>
               </div>
             </div>

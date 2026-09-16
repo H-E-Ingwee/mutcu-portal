@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import api from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
-import { History, Search, Plus, Edit2, Trash2, X, Check } from 'lucide-react'
+import { History, Search, Plus, Edit2, Trash2, X, Check, Camera, User } from 'lucide-react'
 
 export default function Leadership() {
   const { isAdmin } = useAuth()
   const [current, setCurrent] = useState([])
   const [history, setHistory] = useState([])
   const [positions, setPositions] = useState([])
+  const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('current')
   const [searchName, setSearchName] = useState('')
@@ -17,10 +18,19 @@ export default function Leadership() {
   const [showManual, setShowManual] = useState(false)
   const [editEntry, setEditEntry] = useState(null)
   const [manualForm, setManualForm] = useState({
-    position_id: '', spiritual_year: '', term_number: 1,
+    position_id: '', user_id: '', spiritual_year: '', term_number: 1,
     commissioned_at: '', is_current: false, notes: '',
+    member_name: '', photo_url: '',
   })
   const [saving, setSaving] = useState(false)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [memberResults, setMemberResults] = useState([])
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState('')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoRef = useRef(null)
+
+  const adminCanEdit = isAdmin && isAdmin()
 
   useEffect(() => {
     api.get('/positions').then(r => setPositions(r.data.positions || [])).catch(() => {})
@@ -33,17 +43,71 @@ export default function Leadership() {
     }).finally(() => setLoading(false))
   }, [])
 
+  // Search members when typing
+  useEffect(() => {
+    if (memberSearch.length < 2) { setMemberResults([]); return }
+    const t = setTimeout(() => {
+      api.get(`/members?search=${memberSearch}&limit=8`).then(r => {
+        setMemberResults(r.data.members || r.data.users || [])
+      }).catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [memberSearch])
+
+  const selectMember = (member) => {
+    setManualForm(f => ({
+      ...f,
+      user_id: member.id,
+      member_name: member.name,
+      photo_url: member.photo_url || '',
+    }))
+    setPhotoPreview(member.photo_url || '')
+    setMemberSearch(member.name)
+    setMemberResults([])
+  }
+
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  const uploadPhoto = async () => {
+    if (!photoFile) return manualForm.photo_url
+    setUploadingPhoto(true)
+    try {
+      const formData = new FormData()
+      formData.append('photo', photoFile)
+      const res = await api.post('/upload/photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      const url = res.data.url || res.data.photo_url || ''
+      setManualForm(f => ({ ...f, photo_url: url }))
+      return url
+    } catch {
+      toast.error('Photo upload failed — entry will be saved without photo')
+      return manualForm.photo_url
+    } finally { setUploadingPhoto(false) }
+  }
+
   const saveManualEntry = async () => {
     if (!manualForm.position_id || !manualForm.spiritual_year) {
       return toast.error('Position and spiritual year are required')
     }
     setSaving(true)
     try {
+      // Upload photo if a new file was selected
+      let finalPhotoUrl = manualForm.photo_url
+      if (photoFile) finalPhotoUrl = await uploadPhoto()
+
+      const payload = { ...manualForm, photo_url: finalPhotoUrl }
+
       if (editEntry) {
-        await api.put(`/leadership/${editEntry.id}`, manualForm)
+        await api.put(`/leadership/${editEntry.id}`, payload)
         toast.success('Entry updated')
       } else {
-        await api.post('/leadership/manual', manualForm)
+        await api.post('/leadership/manual', payload)
         toast.success('Leadership entry added')
       }
       const [curRes, histRes] = await Promise.all([
@@ -54,218 +118,202 @@ export default function Leadership() {
       setHistory(histRes.data.history || [])
       setShowManual(false)
       setEditEntry(null)
-      setManualForm({ position_id: '', spiritual_year: '', term_number: 1, commissioned_at: '', is_current: false, notes: '' })
+      setPhotoFile(null)
+      setPhotoPreview('')
+      setMemberSearch('')
+      setManualForm({ position_id: '', user_id: '', spiritual_year: '', term_number: 1, commissioned_at: '', is_current: false, notes: '', member_name: '', photo_url: '' })
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed')
-    } finally {
-      setSaving(false)
-    }
+      toast.error(err.response?.data?.error || 'Failed to save')
+    } finally { setSaving(false) }
   }
 
   const deleteEntry = async (id) => {
-    if (!window.confirm('Delete this leadership entry?')) return
+    if (!window.confirm('Delete this leadership entry? This cannot be undone.')) return
     try {
       await api.delete(`/leadership/${id}`)
-      setHistory(prev => prev.filter(a => a.id !== id))
       setCurrent(prev => prev.filter(a => a.id !== id))
+      setHistory(prev => prev.filter(a => a.id !== id))
       toast.success('Entry deleted')
     } catch {
       toast.error('Failed to delete')
     }
   }
 
-  const startEdit = (appt) => {
+  const openEdit = (appt) => {
     setEditEntry(appt)
     setManualForm({
-      position_id: appt.position_id || '',
+      position_id: appt.position?.id || appt.position_id || '',
+      user_id: appt.user?.id || appt.user_id || '',
       spiritual_year: appt.spiritual_year || '',
       term_number: appt.term_number || 1,
       commissioned_at: appt.commissioned_at?.split('T')[0] || '',
       is_current: appt.is_current || false,
       notes: appt.notes || '',
+      member_name: appt.user?.name || '',
+      photo_url: appt.user?.photo_url || '',
     })
+    setMemberSearch(appt.user?.name || '')
+    setPhotoPreview(appt.user?.photo_url || '')
     setShowManual(true)
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" />
-    </div>
-  )
-
-  const spiritualYears = [...new Set(history.map(a => a.spiritual_year).filter(Boolean))].sort().reverse()
-  const positionTitles = [...new Set(history.map(a => a.position?.title).filter(Boolean))].sort()
-
-  const filteredHistory = history.filter(appt => {
-    const matchName = !searchName || appt.user?.name?.toLowerCase().includes(searchName.toLowerCase())
-    const matchYear = !filterYear || appt.spiritual_year === filterYear
-    const matchPos = !filterPosition || appt.position?.title === filterPosition
-    return matchName && matchYear && matchPos
+  const filteredHistory = history.filter(a => {
+    const name = (a.user?.name || a.notes || '').toLowerCase()
+    const pos = a.position?.title || ''
+    return (
+      (!searchName || name.includes(searchName.toLowerCase())) &&
+      (!filterYear || a.spiritual_year === filterYear) &&
+      (!filterPosition || pos === filterPosition)
+    )
   })
 
-  const groupedHistory = {}
-  filteredHistory.forEach(appt => {
-    const year = appt.spiritual_year || 'Unknown'
-    if (!groupedHistory[year]) groupedHistory[year] = []
-    groupedHistory[year].push(appt)
-  })
-  const sortedYears = Object.keys(groupedHistory).sort().reverse()
+  const uniqueYears = [...new Set(history.map(a => a.spiritual_year).filter(Boolean))].sort().reverse()
 
-  const sortedCurrent = [...current].sort((a, b) =>
-    (a.position?.display_order || 0) - (b.position?.display_order || 0)
-  )
-
-  const adminCanEdit = isAdmin && isAdmin()
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
 
   return (
     <div>
       <div className="page-header">
         <div>
           <h1 className="page-title">Leadership History</h1>
-          <p className="page-subtitle">MUTCU Executive Council — past and present</p>
+          <p className="page-subtitle">Current and past MUTCU Executive Council members</p>
         </div>
         {adminCanEdit && (
-          <button onClick={() => { setShowManual(true); setEditEntry(null); setManualForm({ position_id: '', spiritual_year: '', term_number: 1, commissioned_at: '', is_current: false, notes: '' }) }} className="btn-primary btn-sm">
-            <Plus size={14} />Add Entry
-          </button>
+          <button onClick={() => { setShowManual(true); setEditEntry(null); setManualForm({ position_id: '', user_id: '', spiritual_year: '', term_number: 1, commissioned_at: '', is_current: false, notes: '', member_name: '', photo_url: '' }); setMemberSearch(''); setPhotoPreview(''); setPhotoFile(null) }}
+            className="btn-primary btn-sm"><Plus size={14} /> Add Entry</button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6">
-        <button onClick={() => setTab('current')}
-          className={`px-4 py-2 rounded-lg text-sm font-montserrat font-bold transition-all ${tab === 'current' ? 'bg-navy text-white' : 'bg-white text-gray-500 border border-gray-200'}`}>
-          Current EC
-          {current.length > 0 && <span className="ml-2 badge badge-orange">{current.length}</span>}
-        </button>
-        <button onClick={() => setTab('history')}
-          className={`px-4 py-2 rounded-lg text-sm font-montserrat font-bold transition-all ${tab === 'history' ? 'bg-navy text-white' : 'bg-white text-gray-500 border border-gray-200'}`}>
-          Full History
-          {history.length > 0 && <span className="ml-2 badge badge-gray">{history.length}</span>}
-        </button>
+      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 w-fit">
+        {[{ id: 'current', label: 'Current EC' }, { id: 'history', label: 'Leadership History' }].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t.id ? 'bg-white text-navy shadow-sm' : 'text-gray-500 hover:text-navy'}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Current EC */}
       {tab === 'current' && (
-        current.length === 0 ? (
-          <div className="card p-10 text-center">
-            <History size={40} className="text-gray-300 mx-auto mb-3" />
-            <div className="text-gray-400 text-sm">No current EC commissioned yet.</div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sortedCurrent.map(appt => {
-              const photoUrl = appt.user?.photo_url ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(appt.user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
-              return (
-                <div key={appt.id} className="card p-5 text-center hover:shadow-md transition-all">
-                  <div className="relative inline-block mb-3">
-                    <img src={photoUrl} alt={appt.user?.name}
-                      className="w-20 h-20 rounded-full object-cover border-3 border-orange mx-auto"
-                      style={{ border: '3px solid #FF9700' }} />
-                    {appt.term_number > 1 && (
-                      <div className="absolute -bottom-1 -right-1 bg-orange text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                        {appt.term_number}
-                      </div>
-                    )}
-                  </div>
-                  <div className="font-montserrat font-bold text-navy text-sm mb-0.5">{appt.user?.name}</div>
-                  <div className="text-orange text-xs font-montserrat font-bold mb-1">{appt.position?.title}</div>
-                  <div className="text-gray-400 text-xs mb-2">{appt.user?.primary_ministry || 'General Member'}</div>
-                  {appt.spiritual_year && <span className="badge badge-navy text-xs">{appt.spiritual_year}</span>}
-                  {appt.term_number > 1 && <div className="text-xs text-orange mt-1">Term {appt.term_number}</div>}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {current.length === 0 ? (
+            <div className="col-span-full card p-10 text-center text-gray-400">
+              <History size={36} className="mx-auto mb-3 text-gray-200" />
+              <p className="text-sm">No current EC members found.</p>
+              {adminCanEdit && <button onClick={() => setShowManual(true)} className="btn-primary mt-3 mx-auto"><Plus size={14} /> Add EC Member</button>}
+            </div>
+          ) : current.map(appt => {
+            const photoUrl = appt.user?.photo_url ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(appt.user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
+            return (
+              <div key={appt.id} className="card p-4 text-center hover:shadow-md transition-all">
+                <div className="relative inline-block mb-3">
+                  <img src={photoUrl} alt={appt.user?.name}
+                    className="w-20 h-20 rounded-full object-cover border-2 border-orange mx-auto" />
+                  {adminCanEdit && (
+                    <button onClick={() => openEdit(appt)}
+                      className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange rounded-full flex items-center justify-center shadow-sm hover:bg-orange/80">
+                      <Edit2 size={11} className="text-white" />
+                    </button>
+                  )}
                 </div>
-              )
-            })}
-          </div>
-        )
+                <div className="font-montserrat font-bold text-navy text-sm mb-0.5">{appt.user?.name || appt.notes || '—'}</div>
+                <div className="text-xs text-orange font-semibold mb-1">{appt.position?.title}</div>
+                <div className="text-xs text-gray-400">{appt.spiritual_year}</div>
+                {adminCanEdit && (
+                  <button onClick={() => deleteEntry(appt.id)}
+                    className="mt-2 text-xs text-gray-300 hover:text-red transition-colors">
+                    <Trash2 size={12} className="inline" />
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {/* History */}
       {tab === 'history' && (
         <div>
           {/* Filters */}
-          <div className="card p-4 mb-5">
-            <div className="flex gap-3 flex-wrap items-end">
-              <div className="flex-1 min-w-48 relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="text" className="form-input pl-9 text-sm" placeholder="Search by name..."
-                  value={searchName} onChange={e => setSearchName(e.target.value)} />
-              </div>
-              <select className="form-select text-sm w-40" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-                <option value="">All Years</option>
-                {spiritualYears.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <select className="form-select text-sm w-52" value={filterPosition} onChange={e => setFilterPosition(e.target.value)}>
-                <option value="">All Positions</option>
-                {positionTitles.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              {(searchName || filterYear || filterPosition) && (
-                <button onClick={() => { setSearchName(''); setFilterYear(''); setFilterPosition('') }}
-                  className="btn-outline btn-sm">Clear</button>
-              )}
+          <div className="flex flex-wrap gap-2 mb-4">
+            <div className="relative flex-1 min-w-40">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className="form-input pl-8 py-1.5 text-sm" placeholder="Search by name..."
+                value={searchName} onChange={e => setSearchName(e.target.value)} />
             </div>
-            <div className="text-xs text-gray-400 mt-2">
-              Showing {filteredHistory.length} of {history.length} appointments
-            </div>
+            <select className="form-select text-sm py-1.5" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+              <option value="">All Years</option>
+              {uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select className="form-select text-sm py-1.5" value={filterPosition} onChange={e => setFilterPosition(e.target.value)}>
+              <option value="">All Positions</option>
+              {positions.map(p => <option key={p.id} value={p.title}>{p.title}</option>)}
+            </select>
+            {(searchName || filterYear || filterPosition) && (
+              <button onClick={() => { setSearchName(''); setFilterYear(''); setFilterPosition('') }}
+                className="btn-outline btn-sm"><X size={13} /> Clear</button>
+            )}
           </div>
 
           {filteredHistory.length === 0 ? (
-            <div className="card p-10 text-center">
-              <History size={40} className="text-gray-300 mx-auto mb-3" />
-              <div className="text-gray-400 text-sm">No leadership history found.</div>
+            <div className="card p-10 text-center text-gray-400">
+              <History size={36} className="mx-auto mb-3 text-gray-200" />
+              <p className="text-sm">No leadership history found.</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {sortedYears.map(year => (
-                <div key={year}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="font-montserrat font-bold text-navy text-sm">{year} Spiritual Year</div>
-                    <div className="flex-1 h-px bg-gray-100" />
-                    <span className="badge badge-navy">{groupedHistory[year].length} members</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {groupedHistory[year]
-                      .sort((a, b) => (a.position?.display_order || 0) - (b.position?.display_order || 0))
-                      .map((appt, i) => {
-                        const photoUrl = appt.user?.photo_url ||
-                          `https://ui-avatars.com/api/?name=${encodeURIComponent(appt.user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
-                        return (
-                          <div key={i} className="card p-3 flex items-center gap-3 hover:shadow-sm transition-all">
-                            <img src={photoUrl} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold text-navy text-sm truncate">{appt.user?.name || appt.notes || 'Unknown'}</div>
-                              <div className="text-orange text-xs font-semibold truncate">{appt.position?.title}</div>
-                              <div className="text-gray-400 text-xs">{appt.user?.primary_ministry || 'General'}</div>
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <span className="badge badge-teal">T{appt.term_number}</span>
-                              {adminCanEdit && (
-                                <>
-                                  <button onClick={() => startEdit(appt)} className="text-gray-300 hover:text-navy transition-colors p-0.5">
-                                    <Edit2 size={11} />
-                                  </button>
-                                  <button onClick={() => deleteEntry(appt.id)} className="text-gray-300 hover:text-red transition-colors p-0.5">
-                                    <Trash2 size={11} />
-                                  </button>
-                                </>
-                              )}
+            <div className="card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left px-4 py-3 text-xs font-montserrat font-bold text-gray-400 uppercase">Member</th>
+                    <th className="text-left px-4 py-3 text-xs font-montserrat font-bold text-gray-400 uppercase">Position</th>
+                    <th className="text-left px-4 py-3 text-xs font-montserrat font-bold text-gray-400 uppercase">Year</th>
+                    <th className="text-left px-4 py-3 text-xs font-montserrat font-bold text-gray-400 uppercase">Term</th>
+                    {adminCanEdit && <th className="px-4 py-3"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredHistory.map(appt => {
+                    const photoUrl = appt.user?.photo_url ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(appt.user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
+                    return (
+                      <tr key={appt.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <img src={photoUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                            <div>
+                              <div className="font-semibold text-navy text-sm">{appt.user?.name || appt.notes || '—'}</div>
+                              {appt.notes && appt.user?.name && <div className="text-xs text-gray-400">{appt.notes}</div>}
                             </div>
                           </div>
-                        )
-                      })}
-                  </div>
-                </div>
-              ))}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{appt.position?.title || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{appt.spiritual_year || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-gray-400">Term {appt.term_number || 1}</td>
+                        {adminCanEdit && (
+                          <td className="px-4 py-3">
+                            <div className="flex gap-1 justify-end">
+                              <button onClick={() => openEdit(appt)} className="p-1.5 text-gray-400 hover:text-navy rounded-lg hover:bg-gray-100"><Edit2 size={13} /></button>
+                              <button onClick={() => deleteEntry(appt.id)} className="p-1.5 text-gray-400 hover:text-red rounded-lg hover:bg-red/5"><Trash2 size={13} /></button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       )}
 
-      {/* Manual Entry Modal */}
+      {/* Manual Entry / Edit Modal */}
       {showManual && adminCanEdit && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="card p-6 max-w-md w-full">
+          <div className="card p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-montserrat font-bold text-navy">
                 {editEntry ? 'Edit Leadership Entry' : 'Add Leadership Entry'}
@@ -274,18 +322,89 @@ export default function Leadership() {
                 <X size={18} />
               </button>
             </div>
+
             <div className="space-y-3">
+              {/* Photo upload */}
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-orange" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center border-2 border-dashed border-gray-300">
+                      <User size={24} className="text-gray-300" />
+                    </div>
+                  )}
+                  <button onClick={() => photoRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 bg-orange rounded-full flex items-center justify-center shadow-sm hover:bg-orange/80">
+                    <Camera size={11} className="text-white" />
+                  </button>
+                  <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-navy mb-1">Profile Photo</div>
+                  <div className="text-xs text-gray-400">Click the camera icon to upload a photo, or link a registered member below to use their photo automatically.</div>
+                </div>
+              </div>
+
+              {/* Member search */}
+              <div className="relative">
+                <label className="form-label">Link to Registered Member (Optional)</label>
+                <input className="form-input" placeholder="Search member by name..."
+                  value={memberSearch} onChange={e => { setMemberSearch(e.target.value); if (!e.target.value) setManualForm(f => ({ ...f, user_id: '' })) }} />
+                {memberResults.length > 0 && (
+                  <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 max-h-40 overflow-y-auto">
+                    {memberResults.map(m => (
+                      <button key={m.id} onClick={() => selectMember(m)}
+                        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 text-left">
+                        <img src={m.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=04003D&color=FF9700&size=40&bold=true`}
+                          alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                        <div>
+                          <div className="text-sm font-semibold text-navy">{m.name}</div>
+                          <div className="text-xs text-gray-400">{m.mutcu_number}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {manualForm.user_id && (
+                  <div className="mt-1 text-xs text-teal flex items-center gap-1">
+                    <Check size={11} /> Linked to registered member
+                    <button onClick={() => { setManualForm(f => ({ ...f, user_id: '' })); setMemberSearch('') }}
+                      className="ml-1 text-gray-400 hover:text-red"><X size={11} /></button>
+                  </div>
+                )}
+              </div>
+
+              {/* Member name (for historical entries not in system) */}
+              {!manualForm.user_id && (
+                <div>
+                  <label className="form-label">Member Name (if not in system)</label>
+                  <input className="form-input" placeholder="e.g. John Doe"
+                    value={manualForm.member_name} onChange={e => setManualForm(f => ({ ...f, member_name: e.target.value }))} />
+                </div>
+              )}
+
+              {/* Photo URL fallback */}
+              {!photoFile && (
+                <div>
+                  <label className="form-label">Photo URL (optional, if not uploading)</label>
+                  <input className="form-input" placeholder="https://..."
+                    value={manualForm.photo_url} onChange={e => { setManualForm(f => ({ ...f, photo_url: e.target.value })); setPhotoPreview(e.target.value) }} />
+                </div>
+              )}
+
               <div>
-                <label className="form-label">Position *</label>
+                <label className="form-label">Position <span className="text-orange">*</span></label>
                 <select className="form-select" value={manualForm.position_id} onChange={e => setManualForm(f => ({ ...f, position_id: e.target.value }))}>
                   <option value="">Select position...</option>
                   {positions.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                 </select>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="form-label">Spiritual Year *</label>
-                  <input type="text" className="form-input" placeholder="e.g. 2024/2025"
+                  <label className="form-label">Spiritual Year <span className="text-orange">*</span></label>
+                  <input className="form-input" placeholder="e.g. 2025/2026"
                     value={manualForm.spiritual_year} onChange={e => setManualForm(f => ({ ...f, spiritual_year: e.target.value }))} />
                 </div>
                 <div>
@@ -294,29 +413,33 @@ export default function Leadership() {
                     value={manualForm.term_number} onChange={e => setManualForm(f => ({ ...f, term_number: parseInt(e.target.value) }))} />
                 </div>
               </div>
+
               <div>
                 <label className="form-label">Commissioned Date</label>
                 <input type="date" className="form-input"
                   value={manualForm.commissioned_at} onChange={e => setManualForm(f => ({ ...f, commissioned_at: e.target.value }))} />
               </div>
+
               <div>
-                <label className="form-label">Notes (e.g. member name if not in system)</label>
-                <input type="text" className="form-input" placeholder="Optional notes"
+                <label className="form-label">Notes</label>
+                <input className="form-input" placeholder="Optional notes or context"
                   value={manualForm.notes} onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
+
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="accent-orange"
                   checked={manualForm.is_current} onChange={e => setManualForm(f => ({ ...f, is_current: e.target.checked }))} />
                 <span className="text-sm text-gray-700">Mark as current EC member</span>
               </label>
             </div>
+
             <div className="flex gap-3 mt-5">
-              <button onClick={saveManualEntry} disabled={saving} className="btn-primary flex-1 justify-center">
-                <Check size={15} />{saving ? 'Saving...' : (editEntry ? 'Update Entry' : 'Add Entry')}
+              <button onClick={saveManualEntry} disabled={saving || uploadingPhoto} className="btn-primary flex-1 justify-center">
+                {saving || uploadingPhoto
+                  ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> {uploadingPhoto ? 'Uploading...' : 'Saving...'}</>
+                  : <><Check size={15} /> {editEntry ? 'Update Entry' : 'Add Entry'}</>}
               </button>
-              <button onClick={() => { setShowManual(false); setEditEntry(null) }} className="btn-outline flex-1 justify-center">
-                Cancel
-              </button>
+              <button onClick={() => { setShowManual(false); setEditEntry(null) }} className="btn-outline flex-1 justify-center">Cancel</button>
             </div>
           </div>
         </div>
