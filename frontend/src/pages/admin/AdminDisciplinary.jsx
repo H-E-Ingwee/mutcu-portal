@@ -89,7 +89,8 @@ export default function AdminDisciplinary() {
     finally { setSaving(false) }
   }
 
-  
+  const resolveCase = async () => {
+    if (!resolveForm.outcome) return toast.error('Please select an outcome')
     setSaving(true)
     try {
       const { data } = await api.post('/disciplinary/' + selected.id + '/resolve', resolveForm)
