@@ -43,14 +43,14 @@ function htmlWrap(title, bodyHtml, footerNote = '') {
 }
 
 // ─── Generic send helper (Brevo REST API — no SMTP needed) ───────────────────
-async function sendEmail({ to, subject, html, replyTo }) {
+async function sendEmail({ to, subject, html, replyTo, bcc }) {
   if (!BREVO_API_KEY) {
     console.warn(`[EMAIL SKIPPED — no BREVO_API_KEY] To: ${to} | Subject: ${subject}`)
     return { messageId: 'skipped-no-config' }
   }
 
   // Support comma-separated recipient list
-  const recipients = to.split(',').map(addr => ({ email: addr.trim() }))
+  const recipients = to.split(',').map(addr => ({ email: addr.trim() })).filter(r => r.email)
 
   const payload = {
     sender: { name: FROM_NAME, email: FROM_EMAIL },
@@ -58,6 +58,12 @@ async function sendEmail({ to, subject, html, replyTo }) {
     replyTo: { email: replyTo || REPLY_TO },
     subject,
     htmlContent: html,
+  }
+
+  // Add BCC if provided
+  if (bcc && bcc.length > 0) {
+    const bccList = Array.isArray(bcc) ? bcc : bcc.split(',').map(e => e.trim())
+    payload.bcc = bccList.map(email => ({ email })).filter(b => b.email)
   }
 
   try {
@@ -376,8 +382,34 @@ async function verifyConnection() {
   }
 }
 
+// ─── Test Email ───────────────────────────────────────────────
+async function sendTestEmail(toEmail) {
+  const html = htmlWrap('MUTCU DMS — Test Email', `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="width:56px;height:56px;background:#04003D;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+        <span style="color:#FF9700;font-size:24px;">✓</span>
+      </div>
+      <h2 style="margin:0;color:#04003D;font-size:20px;font-weight:800;">Email Configuration Working!</h2>
+    </div>
+    <p style="color:#374151;font-size:14px;line-height:1.7;">
+      This is a test email from the MUTCU Digital Management System. If you received this, your email configuration is working correctly.
+    </p>
+    <div style="background:#F5F7FA;border-radius:8px;padding:16px;margin:16px 0;">
+      <p style="margin:0;font-size:12px;color:#6B7280;">
+        <strong>Sent to:</strong> ${toEmail}<br/>
+        <strong>From:</strong> ${FROM_EMAIL}<br/>
+        <strong>Reply-To:</strong> ${REPLY_TO}<br/>
+        <strong>Time:</strong> ${new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })} EAT
+      </p>
+    </div>
+    <p style="color:#374151;font-size:13px;">Your MUTCU DMS email system is ready to send notifications to members.</p>
+  `)
+  return sendEmail({ to: toEmail, subject: 'MUTCU DMS — Test Email ✓', html })
+}
+
 module.exports = {
   sendEmail,
+  sendTestEmail,
   sendVerificationEmail,
   sendApprovalEmail,
   sendPasswordResetEmail,

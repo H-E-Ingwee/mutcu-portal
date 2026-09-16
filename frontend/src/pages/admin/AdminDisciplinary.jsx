@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Shield, Plus, Search, Filter, X, Check, AlertTriangle,
-  ChevronRight, Clock, CheckCircle, XCircle, RefreshCw, FileText
+  ChevronRight, Clock, CheckCircle, XCircle, RefreshCw, FileText, Trash2
 } from 'lucide-react'
 
 const SEVERITY = {
@@ -89,8 +89,7 @@ export default function AdminDisciplinary() {
     finally { setSaving(false) }
   }
 
-  const resolveCase = async () => {
-    if (!resolveForm.outcome) return toast.error('Please select an outcome')
+  
     setSaving(true)
     try {
       const { data } = await api.post('/disciplinary/' + selected.id + '/resolve', resolveForm)
@@ -222,11 +221,7 @@ export default function AdminDisciplinary() {
                     {selected.reporter?.name && ' · Reported by ' + selected.reporter.name}
                   </div>
                 </div>
-                {selected.status !== 'resolved' && selected.status !== 'dismissed' && (
-                  <button onClick={() => setShowResolve(true)} className="btn-primary btn-sm">
-                    <Check size={14} />Resolve Case
-                  </button>
-                )}
+                
               </div>
 
               <div className="p-5 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>

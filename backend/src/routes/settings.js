@@ -150,4 +150,17 @@ router.put('/:key', authenticate, requireRole(...ADMIN), async (req, res) => {
   }
 });
 
+// POST /api/settings/test-email — send test email to reply-to address
+router.post('/test-email', authenticate, requireRole('super_admin', 'ec_admin', 'cu_secretary'), async (req, res) => {
+  try {
+    const { sendTestEmail } = require('../lib/email')
+    const REPLY_TO = process.env.MAIL_REPLY_TO || process.env.MAIL_FROM_EMAIL || 'noreply@mutcu.org'
+    await sendTestEmail(REPLY_TO)
+    res.json({ message: `Test email sent to ${REPLY_TO}` })
+  } catch (err) {
+    console.error('[TEST EMAIL ERROR]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router;

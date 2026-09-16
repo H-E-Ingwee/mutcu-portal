@@ -98,11 +98,12 @@ export default function NCDashboard() {
   }
 
   const deleteNominationData = async () => {
-    if (!window.confirm('Delete ALL nomination data for this cycle? This cannot be undone. Only do this after the AGM and commissioning.')) return
+    if (!window.confirm(`Delete ALL nomination data for "${data.cycle?.title}"?\n\nThis will permanently delete:\n• All nominations submitted\n• All vetting decisions\n• All published nominees\n• All objections\n• All NC member records\n\nThis CANNOT be undone. Only do this after the AGM and commissioning.`)) return
     try {
-      await api.delete(`/nominations/data/${data.cycle.id}`)
-      toast.success('Nomination data deleted')
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
+      await api.delete(`/nc/cycle/${data.cycle.id}/all-data`)
+      toast.success('All nomination data deleted successfully')
+      window.location.reload()
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete nomination data') }
   }
 
   const printFullReport = async () => {

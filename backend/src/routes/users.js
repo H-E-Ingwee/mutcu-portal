@@ -157,21 +157,7 @@ router.delete('/:id', authenticate, requireRole('super_admin', 'ec_admin', 'cu_s
       return res.status(403).json({ error: 'Cannot delete admin accounts' });
     }
 
-    // Soft delete — anonymize PII, keep record for audit
-    const { error } = await supabase.from('users').update({
-      enrollment_status: 'deleted',
-      deleted_at: new Date().toISOString(),
-      deletion_reason: reason || 'Deleted by admin',
-      // Anonymize PII
-      email: `deleted_${user.id}@mutcu.deleted`,
-      phone: null,
-      photo_url: null,
-      photo_public_id: null,
-      pending_changes: null,
-      updated_at: new Date().toISOString(),
-    }).eq('id', req.params.id);
-
-    if (error) throw error;
+    
 
     // Audit log
     await supabase.from('audit_logs').insert({
