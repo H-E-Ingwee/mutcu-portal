@@ -52,7 +52,9 @@ export default function FinancialReports() {
   const [selectedYear, setSelectedYear] = useState('')
   const [downloading, setDownloading] = useState({})
   const [balance, setBalance] = useState(null)
-  
+  const [loadingBalance, setLoadingBalance] = useState(false)
+
+  useEffect(() => {
     setLoadingBalance(true)
     api.get(`/treasury/balance?spiritual_year=${selectedYear}`)
       .then(r => setBalance(r.data))
@@ -127,7 +129,6 @@ export default function FinancialReports() {
     const win = window.open('', '_blank')
     win.document.write(content)
     win.document.close()
-    win.print()
   }
 
   return (
@@ -233,6 +234,5 @@ export default function FinancialReports() {
           </div>
         </div>
       </div>
-    </div>
   )
 }
