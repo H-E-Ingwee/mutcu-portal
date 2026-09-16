@@ -52,14 +52,7 @@ export default function FinancialReports() {
   const [selectedYear, setSelectedYear] = useState('')
   const [downloading, setDownloading] = useState({})
   const [balance, setBalance] = useState(null)
-  const [loadingBalance, setLoadingBalance] = useState(false)
-
-  useEffect(() => {
-    
-  }, [])
-
-  useEffect(() => {
-    if (!selectedYear) return
+  
     setLoadingBalance(true)
     api.get(`/treasury/balance?spiritual_year=${selectedYear}`)
       .then(r => setBalance(r.data))
@@ -215,7 +208,7 @@ export default function FinancialReports() {
         ))}
       </div>
 
-      <div className="mt-8">
+      
         <h3 className="font-montserrat font-bold text-navy text-sm mb-3">📋 How to Use These Reports</h3>
         <div className="space-y-2 text-sm text-gray-600">
           <div className="flex items-start gap-2">

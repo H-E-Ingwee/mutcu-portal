@@ -10,28 +10,60 @@ export default function IncomeLedger() {
   const [years, setYears] = useState([])
   const [selectedYear, setSelectedYear] = useState('')
   const [loading, setLoading] = useState(true)
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ source: '', category: 'Offering', amount: '', date: new Date().toISOString().split('T')[0], notes: '', received_by: '' })
+  const [form, setForm] = useState({
+    source: '', category: 'Offering', amount: '',
+    date: new Date().toISOString().split('T')[0], notes: '', received_by: ''
+  })
 
-  
+  // Load financial years on mount with fallback
+  useEffect(() => {
+    const currentYear = `${new Date().getFullYear()}/${new Date().getFullYear() + 1}`
+    api.get('/treasury/years')
+      .then(r => {
+        const yrs = r.data.years || []
+        const labels = yrs.map(y => (typeof y === 'object' ? y.label : y)).filter(Boolean)
+        if (!labels.includes(currentYear)) labels.unshift(currentYear)
+        setYears(labels)
+        const active = yrs.find(y => typeof y === 'object' && y.is_active)
+        setSelectedYear(active?.label || labels[0] || currentYear)
+      })
+      .catch(() => {
+        api.get('/treasury/spiritual-years')
+          .then(r => {
+            const labels = (r.data.labels || r.data.years || [])
+              .map(y => (typeof y === 'object' ? y.label : y)).filter(Boolean)
+            if (!labels.includes(currentYear)) labels.unshift(currentYear)
+            setYears(labels)
+            setSelectedYear(labels[0] || currentYear)
+          })
+          .catch(() => { setYears([currentYear]); setSelectedYear(currentYear) })
+      })
+  }, [])
 
-  const load = async (yr = selectedYear, pg = 1) => {
+  const load = async (yr, pg = 1) => {
     if (!yr) return
     setLoading(true)
     try {
       const res = await api.get(`/treasury/income?spiritual_year=${yr}&page=${pg}&limit=20`)
       setIncome(res.data.income || [])
       setTotalCount(res.data.total || 0)
-      setTotal((res.data.income || []).reduce((s, r) => s + parseFloat(r.amount || 0), 0))
-    } catch {} finally { setLoading(false) }
+    } catch (err) {
+      console.error('Income load error:', err)
+    } finally { setLoading(false) }
   }
 
-  useEffect(() => { load(selectedYear, 1); setPage(1) }, [selectedYear])
+  useEffect(() => {
+    if (selectedYear) { load(selectedYear, 1); setPage(1) }
+    else {
+      const t = setTimeout(() => setLoading(false), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [selectedYear])
 
   const save = async () => {
     if (!form.source || !form.amount || !form.date) return toast.error('Source, amount, and date are required')
@@ -68,8 +100,9 @@ export default function IncomeLedger() {
 
   const downloadCSV = async () => {
     try {
+      const token = localStorage.getItem('mutcu_token')
       const res = await fetch(`/api/treasury/reports/income-expenditure?spiritual_year=${selectedYear}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('mutcu_token')}` }
+        headers: { Authorization: `Bearer ${token}` }
       })
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -77,7 +110,12 @@ export default function IncomeLedger() {
     } catch { toast.error('Export failed') }
   }
 
-  const categoryColor = { Offering: 'badge-navy', Fundraising: 'badge-orange', Donation: 'badge-teal', Grant: 'badge-green', 'RMC Collection': 'badge-gray', 'Event Proceeds': 'badge-teal', Other: 'badge-gray' }
+  const categoryColor = {
+    Offering: 'badge-navy', Fundraising: 'badge-orange', Donation: 'badge-teal',
+    Grant: 'badge-green', 'RMC Collection': 'badge-gray', 'Event Proceeds': 'badge-teal', Other: 'badge-gray'
+  }
+
+  const pageTotal = income.reduce((s, i) => s + parseFloat(i.amount || 0), 0)
 
   return (
     <div>
@@ -94,19 +132,6 @@ export default function IncomeLedger() {
           <button onClick={() => { setShowForm(true); setEditingId(null); setForm({ source: '', category: 'Offering', amount: '', date: new Date().toISOString().split('T')[0], notes: '', received_by: '' }) }}
             className="btn-primary btn-sm"><Plus size={14} /> Record Income</button>
         </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        {CATEGORIES.slice(0, 4).map(cat => {
-          const catTotal = income.filter(i => i.category === cat).reduce((s, i) => s + parseFloat(i.amount || 0), 0)
-          return (
-            <div key={cat} className="card p-4 text-center">
-              <div className="text-lg font-montserrat font-bold text-navy">KES {catTotal.toLocaleString()}</div>
-              <div className="text-xs text-gray-400 mt-0.5">{cat}</div>
-            </div>
-          )
-        })}
       </div>
 
       {/* Add/Edit Form */}
@@ -157,27 +182,30 @@ export default function IncomeLedger() {
       {/* Income Table */}
       <div className="card">
         <div className="card-header">
-          <h2 className="font-montserrat font-bold text-navy text-sm">Income Records — {selectedYear}</h2>
+          <h2 className="font-montserrat font-bold text-navy text-sm">Income Records — {selectedYear || '...'}</h2>
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-400">{totalCount} entries</span>
-            <span className="font-montserrat font-bold text-teal text-sm">Total: KES {income.reduce((s, i) => s + parseFloat(i.amount || 0), 0).toLocaleString()}</span>
+            <span className="font-montserrat font-bold text-teal text-sm">Total: KES {pageTotal.toLocaleString()}</span>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-32"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange" /></div>
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" />
+          </div>
         ) : income.length === 0 ? (
-          <div className="text-center py-10 text-gray-400">
-            <DollarSign size={32} className="mx-auto mb-2 text-gray-200" />
-            <p className="text-sm">No income recorded for {selectedYear}.</p>
-            <button onClick={() => setShowForm(true)} className="btn-primary mt-3 mx-auto"><Plus size={14} /> Record First Income</button>
+          <div className="text-center py-12 text-gray-400">
+            <DollarSign size={36} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-sm font-semibold">No income recorded for {selectedYear}</p>
+            <p className="text-xs mt-1">Click "Record Income" to add the first entry.</p>
+            <button onClick={() => setShowForm(true)} className="btn-primary mt-4 mx-auto"><Plus size={14} /> Record First Income</button>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr className="border-b border-gray-100 bg-gray-50">
                     <th className="text-left px-4 py-3 text-xs font-montserrat font-bold text-gray-400 uppercase">Ref</th>
                     <th className="text-left px-4 py-3 text-xs font-montserrat font-bold text-gray-400 uppercase">Date</th>
                     <th className="text-left px-4 py-3 text-xs font-montserrat font-bold text-gray-400 uppercase">Source</th>
@@ -191,7 +219,9 @@ export default function IncomeLedger() {
                   {income.map(entry => (
                     <tr key={entry.id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="px-4 py-3 text-xs text-gray-400 font-mono">{entry.income_number}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{new Date(entry.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                        {new Date(entry.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="font-semibold text-navy text-sm">{entry.source}</div>
                         {entry.notes && <div className="text-xs text-gray-400">{entry.notes}</div>}
@@ -213,21 +243,18 @@ export default function IncomeLedger() {
                 <tfoot>
                   <tr className="border-t-2 border-gray-200 bg-gray-50">
                     <td colSpan={4} className="px-4 py-3 font-montserrat font-bold text-navy text-sm">PAGE TOTAL</td>
-                    <td className="px-4 py-3 text-right font-montserrat font-bold text-teal">
-                      KES {income.reduce((s, i) => s + parseFloat(i.amount || 0), 0).toLocaleString()}
-                    </td>
+                    <td className="px-4 py-3 text-right font-montserrat font-bold text-teal">KES {pageTotal.toLocaleString()}</td>
                     <td colSpan={2}></td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-            {/* Pagination */}
             {totalCount > 20 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
                 <span className="text-xs text-gray-400">Showing {((page - 1) * 20) + 1}–{Math.min(page * 20, totalCount)} of {totalCount}</span>
                 <div className="flex gap-2">
-                  <button disabled={page === 1} onClick={() => { setPage(p => p - 1); load(selectedYear, page - 1) }} className="btn-outline btn-sm">← Prev</button>
-                  <button disabled={page * 20 >= totalCount} onClick={() => { setPage(p => p + 1); load(selectedYear, page + 1) }} className="btn-outline btn-sm">Next →</button>
+                  <button disabled={page === 1} onClick={() => { const p = page - 1; setPage(p); load(selectedYear, p) }} className="btn-outline btn-sm">← Prev</button>
+                  <button disabled={page * 20 >= totalCount} onClick={() => { const p = page + 1; setPage(p); load(selectedYear, p) }} className="btn-outline btn-sm">Next →</button>
                 </div>
               </div>
             )}
