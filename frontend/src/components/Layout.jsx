@@ -6,10 +6,9 @@ import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
   MessageSquare, ClipboardList, Megaphone, History, Send, X,
-  CalendarDays, ShieldAlert, DollarSign, Church, Lock, Clock, TrendingUp
+  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp
 } from 'lucide-react'
 
-// Pending member locked page component
 function PendingLock() {
   return (
     <div className="flex items-center justify-center h-full min-h-64">
@@ -32,7 +31,7 @@ function PendingLock() {
 }
 
 export default function Layout() {
-  const { user, logout, isAdmin, isSecretary, isTreasurer, isNC, isECCoordinator, isMinistrySecretary, canManageRequisitions, getMyMinistry } = useAuth()
+  const { user, logout, isAdmin, isSecretary, isNC, isECCoordinator, isMinistrySecretary, getMyMinistry } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -43,6 +42,7 @@ export default function Layout() {
 
   const isPending = user?.enrollment_status === 'pending'
   const myMinistry = getMyMinistry ? getMyMinistry() : null
+  const isTreasurer = user?.role === 'cu_treasurer'
 
   const photoUrl = user?.photo_url ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
@@ -53,10 +53,9 @@ export default function Layout() {
     return () => clearInterval(interval)
   }, [])
 
-  // Fetch pending profile changes count for secretary/admin
   useEffect(() => {
-    const isSecretary = ['super_admin', 'ec_admin', 'cu_secretary'].includes(user?.role)
-    if (!isSecretary) return
+    const canSeeChanges = ['super_admin', 'ec_admin', 'cu_secretary'].includes(user?.role)
+    if (!canSeeChanges) return
     api.get('/users/pending-changes').then(r => setPendingChangesCount(r.data.total || 0)).catch(() => {})
   }, [user?.role])
 
@@ -102,7 +101,10 @@ export default function Layout() {
     </NavLink>
   )
 
-  // Check if current page should be locked for pending members
+  const SectionLabel = ({ label }) => (
+    <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">{label}</div>
+  )
+
   const allowedPendingPaths = ['/dashboard', '/profile/edit', '/contact', '/verify-email']
   const isLockedForPending = isPending && !allowedPendingPaths.some(p => location.pathname.startsWith(p))
 
@@ -128,7 +130,6 @@ export default function Layout() {
         <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
           <NavItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
 
-          {/* Pending members only see limited nav */}
           {isPending ? (
             <>
               <NavItem to="/contact" icon={Send} label="Contact Admin" />
@@ -142,19 +143,24 @@ export default function Layout() {
             </>
           ) : (
             <>
-              <NavItem to="/announcements" icon={Megaphone} label="Announcements" />
-              <NavItem to="/nominations" icon={FileText} label="Nominations" />
-              <NavItem to="/nominations/nominees" icon={Award} label="Nominees" />
-              <NavItem to="/member-card" icon={UserCircle} label="Member Card" />
-              <NavItem to="/leadership" icon={History} label="Leadership History" />
-              <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
-              <NavItem to="/constitution" icon={BookOpen} label="Constitution" />
-              <NavItem to="/contact" icon={Send} label="Contact Admin" />
+              {/* ── General member nav ── */}
+              {!isTreasurer && (
+                <>
+                  <NavItem to="/announcements" icon={Megaphone} label="Announcements" />
+                  <NavItem to="/nominations" icon={FileText} label="Nominations" />
+                  <NavItem to="/nominations/nominees" icon={Award} label="Nominees" />
+                  <NavItem to="/member-card" icon={UserCircle} label="Member Card" />
+                  <NavItem to="/leadership" icon={History} label="Leadership History" />
+                  <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
+                  <NavItem to="/constitution" icon={BookOpen} label="Constitution" />
+                  <NavItem to="/contact" icon={Send} label="Contact Admin" />
+                </>
+              )}
 
-              {/* NC Panel */}
+              {/* ── NC Panel ── */}
               {isNC && isNC() && (
                 <>
-                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Nomination College</div>
+                  <SectionLabel label="Nomination College" />
                   <NavItem to="/nc" icon={ClipboardList} label="NC Dashboard" />
                   <NavItem to="/nc/objections" icon={MessageSquare} label="Objections" />
                   <NavItem to="/nc/suggestions" icon={Mic2} label="Suggestions" />
@@ -164,32 +170,56 @@ export default function Layout() {
                 </>
               )}
 
-              {/* Ministry Secretary */}
-              {(isMinistrySecretary && isMinistrySecretary()) && (
+              {/* ── Ministry Secretary ── */}
+              {isMinistrySecretary && isMinistrySecretary() && (
                 <>
-                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">
-                    {myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'}
-                  </div>
+                  <SectionLabel label={myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'} />
                   <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
 
-              {/* EC Coordinators */}
-              {(isECCoordinator && isECCoordinator()) && (
+              {/* ── EC Coordinators ── */}
+              {isECCoordinator && isECCoordinator() && !isTreasurer && (
                 <>
-                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">
-                    {myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'}
-                  </div>
+                  <SectionLabel label={myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'} />
                   <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
 
-              {/* Administration */}
-              {(isAdmin && isAdmin()) && (
+              {/* ── Secretary ── */}
+              {isSecretary && isSecretary() && (
                 <>
-                  <div className="text-white/30 text-xs font-montserrat font-semibold uppercase tracking-wider px-4 pt-4 pb-1">Administration</div>
+                  <SectionLabel label="Secretary" />
+                  <NavItem to="/secretary/members" icon={Users} label="Member Register" />
+                  <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" badge={pendingChangesCount} />
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                </>
+              )}
+
+              {/* ── CU Treasurer ── */}
+              {isTreasurer && (
+                <>
+                  <SectionLabel label="Treasury" />
+                  <NavItem to="/treasurer" icon={BarChart3} label="Dashboard" />
+                  <NavItem to="/treasurer/requisitions" icon={FileText} label="Requisitions" />
+                  <NavItem to="/treasurer/income" icon={TrendingUp} label="Income Ledger" />
+                  <NavItem to="/treasurer/budget" icon={Award} label="Budget Manager" />
+                  <NavItem to="/treasurer/ledger" icon={BookOpen} label="General Ledger" />
+                  <NavItem to="/treasurer/reports" icon={BarChart3} label="Financial Reports" />
+                  <NavItem to="/treasurer/years" icon={CalendarDays} label="Financial Years" />
+                  <SectionLabel label="Other" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
+                  <NavItem to="/admin/messages" icon={MessageSquare} label="Messages" />
+                  <NavItem to="/treasurer/profile" icon={UserCircle} label="My Profile" />
+                </>
+              )}
+
+              {/* ── Admin ── */}
+              {isAdmin && isAdmin() && (
+                <>
+                  <SectionLabel label="Administration" />
                   <NavItem to="/admin" icon={Settings} label="Admin Dashboard" />
                   <NavItem to="/admin/cycles" icon={BookOpen} label="Nomination Cycles" />
                   <NavItem to="/admin/positions" icon={Award} label="EC Positions" />
@@ -201,9 +231,16 @@ export default function Layout() {
                   <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
                 </>
               )}
+
+              {!isTreasurer && (
+                <NavItem to="/profile/edit" icon={UserCircle} label="My Profile" />
+              )}
             </>
           )}
+        </nav>
 
+        {/* User footer */}
+        <div className="p-3 border-t border-white/10">
           <div className="flex items-center gap-3 px-3 py-2">
             <img src={photoUrl} alt={user?.name} className="w-8 h-8 rounded-full object-cover border-2 border-orange/50" />
             <div className="flex-1 min-w-0">
@@ -214,8 +251,7 @@ export default function Layout() {
               <LogOut size={15} />
             </button>
           </div>
-        </nav>
-
+        </div>
       </aside>
 
       {/* Overlay */}
@@ -236,7 +272,8 @@ export default function Layout() {
           <div className="flex items-center gap-2">
             {/* Notifications */}
             <div className="relative">
-              <button onClick={toggleNotifications} className="relative p-2 text-gray-500 hover:text-navy hover:bg-gray-100 rounded-lg transition-all">
+              <button onClick={toggleNotifications}
+                className="relative p-2 text-gray-400 hover:text-navy hover:bg-gray-100 rounded-xl transition-all">
                 <Bell size={18} />
                 {unreadCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 bg-orange text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
@@ -245,38 +282,34 @@ export default function Layout() {
                 )}
               </button>
               {showNotifications && (
-                <div className="absolute right-0 top-10 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50">
+                <div className="absolute right-0 top-10 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <span className="font-montserrat font-bold text-navy text-sm">Notifications</span>
                     <div className="flex items-center gap-2">
-                      {unreadCount > 0 && <button onClick={markAllRead} className="text-xs text-orange hover:underline">Mark all read</button>}
+                      {unreadCount > 0 && (
+                        <button onClick={markAllRead} className="text-xs text-orange hover:underline">Mark all read</button>
+                      )}
                       <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
                     </div>
                   </div>
-                  <div className="max-h-72 overflow-y-auto">
+                  <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="text-center py-6 text-gray-400 text-sm">No notifications</div>
+                      <div className="text-center py-8 text-gray-400 text-sm">No notifications yet</div>
                     ) : notifications.map(n => (
-                      <div key={n.id} className={`px-4 py-3 border-b border-gray-50 hover:bg-gray-50 cursor-pointer ${!n.read_at ? 'bg-orange/5' : ''}`}
-                        onClick={async () => { await api.post(`/notifications/${n.id}/read`).catch(() => {}); fetchUnreadCount() }}>
-                        <div className="font-semibold text-navy text-xs">{n.title}</div>
-                        <div className="text-gray-500 text-xs mt-0.5">{n.body}</div>
-                        {!n.read_at && <div className="w-2 h-2 bg-orange rounded-full mt-1" />}
+                      <div key={n.id} className={`px-4 py-3 border-b border-gray-50 hover:bg-gray-50 ${!n.read_at ? 'bg-orange/5' : ''}`}>
+                        <div className="font-semibold text-navy text-xs mb-0.5">{n.title}</div>
+                        <div className="text-gray-500 text-xs">{n.body}</div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
             </div>
-            {/* Profile */}
-            <NavLink to="/profile/edit" className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-lg transition-all">
-              <img src={photoUrl} alt={user?.name} className="w-7 h-7 rounded-full object-cover border border-orange/30" />
-              <span className="text-sm font-semibold text-navy hidden sm:block">{user?.name?.split(' ')[0]}</span>
-            </NavLink>
+            <img src={photoUrl} alt={user?.name} className="w-8 h-8 rounded-full object-cover border-2 border-orange/30" />
           </div>
         </header>
 
-        {/* Content — show lock for pending members on restricted pages */}
+        {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {isLockedForPending ? <PendingLock /> : <Outlet />}
         </main>
