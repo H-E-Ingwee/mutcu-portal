@@ -228,6 +228,7 @@ export default function Layout() {
                   <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
                   <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
                   <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
+                  <NavItem to="/admin/nc-data" icon={Shield} label="NC Data Manager" />
                   <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
                 </>
               )}

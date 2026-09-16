@@ -107,6 +107,33 @@ router.get('/audit-log', authenticate, requireRole(...ADMIN_AND_SECRETARY), asyn
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// GET /api/admin/cycles/:id/stats — get data counts for a cycle
+router.get('/cycles/:id/stats', authenticate, requireRole('super_admin', 'ec_admin', 'nc_chair'), async (req, res) => {
+  try {
+    const cycleId = req.params.id
+    const [ncRes, recRes, vetRes, nomRes, objRes, sugRes, byNomRes] = await Promise.all([
+      supabase.from('nc_members').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+      supabase.from('recommendations').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+      supabase.from('vetting_decisions').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+      supabase.from('nominees').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+      supabase.from('objections').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
+      supabase.from('free_text_suggestions').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId).catch(() => ({ count: 0 })),
+      supabase.from('by_nominations').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId).catch(() => ({ count: 0 })),
+    ])
+    res.json({
+      stats: {
+        nc_members: ncRes.count || 0,
+        recommendations: recRes.count || 0,
+        vetting_decisions: vetRes.count || 0,
+        nominees: nomRes.count || 0,
+        objections: objRes.count || 0,
+        suggestions: sugRes.count || 0,
+        by_nominations: byNomRes.count || 0,
+      }
+    })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 // GET /api/admin/cycles — NC Chair & Secretary can read cycles
 router.get('/cycles', authenticate, requireRole(...ADMIN_AND_SECRETARY, 'nc_chair', 'nc_secretary'), async (req, res) => {
   try {

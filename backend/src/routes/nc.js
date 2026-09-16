@@ -517,22 +517,22 @@ router.put('/by-nominations/:id', authenticate, requireRole('nc_chair', 'ec_admi
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// DELETE /api/nc/cycle/:cycleId/all-data — delete all nomination data for a cycle
+// DELETE /api/nc/cycle/:cycleId/all-data — clear all data, keep cycle shell
 router.delete('/cycle/:cycleId/all-data', authenticate, requireRole('nc_chair', 'super_admin', 'ec_admin'), async (req, res) => {
   try {
     const { cycleId } = req.params
     const { data: cycle } = await supabase.from('nomination_cycles').select('title,status').eq('id', cycleId).single()
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' })
 
-    // Delete in order (foreign key safe)
+    // Delete in dependency order (foreign key safe)
     await supabase.from('objections').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('nominees').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('vetting_decisions').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('nominations').delete().eq('cycle_id', cycleId).catch(() => {})
+    await supabase.from('recommendations').delete().eq('cycle_id', cycleId).catch(() => {})
+    await supabase.from('free_text_suggestions').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('nc_members').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('by_nominations').delete().eq('cycle_id', cycleId).catch(() => {})
 
-    // Audit log
     await supabase.from('audit_logs').insert({
       actor_id: req.user.id,
       action: 'nc.data_deleted',
@@ -552,11 +552,12 @@ router.delete('/cycle/:cycleId', authenticate, requireRole('super_admin', 'ec_ad
     const { data: cycle } = await supabase.from('nomination_cycles').select('title').eq('id', cycleId).single()
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' })
 
-    // Delete all related data first
+    // Delete all related data first (dependency order)
     await supabase.from('objections').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('nominees').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('vetting_decisions').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('nominations').delete().eq('cycle_id', cycleId).catch(() => {})
+    await supabase.from('recommendations').delete().eq('cycle_id', cycleId).catch(() => {})
+    await supabase.from('free_text_suggestions').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('nc_members').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('by_nominations').delete().eq('cycle_id', cycleId).catch(() => {})
     await supabase.from('nomination_cycles').delete().eq('id', cycleId)
