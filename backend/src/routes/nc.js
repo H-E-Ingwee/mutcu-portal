@@ -517,6 +517,15 @@ router.put('/by-nominations/:id', authenticate, requireRole('nc_chair', 'ec_admi
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Helper: safe delete with count
+async function safeDelete(table, cycleId) {
+  try {
+    const { count } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId)
+    await supabase.from(table).delete().eq('cycle_id', cycleId)
+    return count || 0
+  } catch { return 0 }
+}
+
 // DELETE /api/nc/cycle/:cycleId/all-data — clear all data, keep cycle shell
 router.delete('/cycle/:cycleId/all-data', authenticate, requireRole('nc_chair', 'super_admin', 'ec_admin'), async (req, res) => {
   try {
@@ -524,24 +533,33 @@ router.delete('/cycle/:cycleId/all-data', authenticate, requireRole('nc_chair', 
     const { data: cycle } = await supabase.from('nomination_cycles').select('title,status').eq('id', cycleId).single()
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' })
 
-    // Delete in dependency order (foreign key safe)
-    await supabase.from('objections').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('nominees').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('vetting_decisions').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('recommendations').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('free_text_suggestions').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('nc_members').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('by_nominations').delete().eq('cycle_id', cycleId).catch(() => {})
+    // Count before deleting (for audit log)
+    const counts = {
+      objections: await safeDelete('objections', cycleId),
+      nominees: await safeDelete('nominees', cycleId),
+      vetting_decisions: await safeDelete('vetting_decisions', cycleId),
+      recommendations: await safeDelete('recommendations', cycleId),
+      nc_members: await safeDelete('nc_members', cycleId),
+      by_nominations: await safeDelete('by_nominations', cycleId),
+    }
+    // free_text_suggestions may not exist in all deployments
+    try { await supabase.from('free_text_suggestions').delete().eq('cycle_id', cycleId) } catch {}
+
+    const totalDeleted = Object.values(counts).reduce((s, v) => s + v, 0)
 
     await supabase.from('audit_logs').insert({
       actor_id: req.user.id,
-      action: 'nc.data_deleted',
+      action: 'nc.data_reset',
       entity_type: 'nomination_cycle',
       entity_id: cycleId,
-      description: `All nomination data deleted for cycle "${cycle.title}" by ${req.user.name}`,
+      description: `NC data reset for cycle "${cycle.title}" by ${req.user.name}. Deleted: ${totalDeleted} records (${Object.entries(counts).map(([k,v]) => `${v} ${k}`).join(', ')})`,
     }).catch(() => {})
 
-    res.json({ message: `All nomination data for "${cycle.title}" has been deleted` })
+    res.json({
+      message: `All nomination data for "${cycle.title}" has been cleared. Cycle shell preserved.`,
+      deleted_counts: counts,
+      total_deleted: totalDeleted,
+    })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -552,25 +570,36 @@ router.delete('/cycle/:cycleId', authenticate, requireRole('super_admin', 'ec_ad
     const { data: cycle } = await supabase.from('nomination_cycles').select('title').eq('id', cycleId).single()
     if (!cycle) return res.status(404).json({ error: 'Cycle not found' })
 
-    // Delete all related data first (dependency order)
-    await supabase.from('objections').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('nominees').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('vetting_decisions').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('recommendations').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('free_text_suggestions').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('nc_members').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('by_nominations').delete().eq('cycle_id', cycleId).catch(() => {})
-    await supabase.from('nomination_cycles').delete().eq('id', cycleId)
+    // Count and delete all related data (dependency order)
+    const counts = {
+      objections: await safeDelete('objections', cycleId),
+      nominees: await safeDelete('nominees', cycleId),
+      vetting_decisions: await safeDelete('vetting_decisions', cycleId),
+      recommendations: await safeDelete('recommendations', cycleId),
+      nc_members: await safeDelete('nc_members', cycleId),
+      by_nominations: await safeDelete('by_nominations', cycleId),
+    }
+    try { await supabase.from('free_text_suggestions').delete().eq('cycle_id', cycleId) } catch {}
+
+    // Delete the cycle itself
+    const { error: cycleErr } = await supabase.from('nomination_cycles').delete().eq('id', cycleId)
+    if (cycleErr) throw cycleErr
+
+    const totalDeleted = Object.values(counts).reduce((s, v) => s + v, 0)
 
     await supabase.from('audit_logs').insert({
       actor_id: req.user.id,
       action: 'nc.cycle_deleted',
       entity_type: 'nomination_cycle',
       entity_id: cycleId,
-      description: `Nomination cycle "${cycle.title}" and all data permanently deleted by ${req.user.name}`,
+      description: `Nomination cycle "${cycle.title}" permanently deleted by ${req.user.name}. Cascade-deleted: ${totalDeleted} records (${Object.entries(counts).map(([k,v]) => `${v} ${k}`).join(', ')})`,
     }).catch(() => {})
 
-    res.json({ message: `Nomination cycle "${cycle.title}" permanently deleted` })
+    res.json({
+      message: `Nomination cycle "${cycle.title}" permanently deleted.`,
+      deleted_counts: counts,
+      total_deleted: totalDeleted,
+    })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

@@ -92,6 +92,25 @@ router.post('/cycles/:id/set-status', authenticate, requireRole(...ADMIN_AND_NC_
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// GET /api/admin/nc-audit-log — NC-specific audit log with filtering
+router.get('/nc-audit-log', authenticate, requireRole('super_admin', 'ec_admin'), async (req, res) => {
+  try {
+    const { from, to, actor_id, page = 1, limit = 50 } = req.query
+    let query = supabase.from('audit_logs')
+      .select('*, actor:actor_id(id,name,email,role)', { count: 'exact' })
+      .in('action', ['nc.data_reset', 'nc.cycle_deleted', 'nc.data_deleted', 'nc.nominees_published', 'nc.dissolved'])
+      .order('created_at', { ascending: false })
+    if (from) query = query.gte('created_at', from)
+    if (to) query = query.lte('created_at', to + 'T23:59:59')
+    if (actor_id) query = query.eq('actor_id', actor_id)
+    const offset = (parseInt(page) - 1) * parseInt(limit)
+    query = query.range(offset, offset + parseInt(limit) - 1)
+    const { data, error, count } = await query
+    if (error) throw error
+    res.json({ logs: data || [], total: count || 0 })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 // GET /api/admin/audit-log
 router.get('/audit-log', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
   try {
@@ -107,30 +126,26 @@ router.get('/audit-log', authenticate, requireRole(...ADMIN_AND_SECRETARY), asyn
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// GET /api/admin/cycles/:id/stats — get data counts for a cycle
+// GET /api/admin/cycles/:id/stats — get data counts for a cycle (resilient — never fails)
 router.get('/cycles/:id/stats', authenticate, requireRole('super_admin', 'ec_admin', 'nc_chair'), async (req, res) => {
+  const cycleId = req.params.id
+  const safeCount = async (table, field = 'cycle_id') => {
+    try {
+      const { count } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(field, cycleId)
+      return count || 0
+    } catch { return 0 }
+  }
   try {
-    const cycleId = req.params.id
-    const [ncRes, recRes, vetRes, nomRes, objRes, sugRes, byNomRes] = await Promise.all([
-      supabase.from('nc_members').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-      supabase.from('recommendations').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-      supabase.from('vetting_decisions').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-      supabase.from('nominees').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-      supabase.from('objections').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId),
-      supabase.from('free_text_suggestions').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId).catch(() => ({ count: 0 })),
-      supabase.from('by_nominations').select('*', { count: 'exact', head: true }).eq('cycle_id', cycleId).catch(() => ({ count: 0 })),
+    const [nc_members, recommendations, vetting_decisions, nominees, objections, suggestions, by_nominations] = await Promise.all([
+      safeCount('nc_members'),
+      safeCount('recommendations'),
+      safeCount('vetting_decisions'),
+      safeCount('nominees'),
+      safeCount('objections'),
+      safeCount('free_text_suggestions'),
+      safeCount('by_nominations'),
     ])
-    res.json({
-      stats: {
-        nc_members: ncRes.count || 0,
-        recommendations: recRes.count || 0,
-        vetting_decisions: vetRes.count || 0,
-        nominees: nomRes.count || 0,
-        objections: objRes.count || 0,
-        suggestions: sugRes.count || 0,
-        by_nominations: byNomRes.count || 0,
-      }
-    })
+    res.json({ stats: { nc_members, recommendations, vetting_decisions, nominees, objections, suggestions, by_nominations } })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
