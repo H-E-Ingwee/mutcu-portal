@@ -547,13 +547,13 @@ router.delete('/cycle/:cycleId/all-data', authenticate, requireRole('nc_chair', 
 
     const totalDeleted = Object.values(counts).reduce((s, v) => s + v, 0)
 
-    await supabase.from('audit_logs').insert({
+    supabase.from('audit_logs').insert({
       actor_id: req.user.id,
       action: 'nc.data_reset',
       entity_type: 'nomination_cycle',
       entity_id: cycleId,
       description: `NC data reset for cycle "${cycle.title}" by ${req.user.name}. Deleted: ${totalDeleted} records (${Object.entries(counts).map(([k,v]) => `${v} ${k}`).join(', ')})`,
-    }).catch(() => {})
+    }).then(() => {}).catch(() => {})
 
     res.json({
       message: `All nomination data for "${cycle.title}" has been cleared. Cycle shell preserved.`,
@@ -587,13 +587,13 @@ router.delete('/cycle/:cycleId', authenticate, requireRole('super_admin', 'ec_ad
 
     const totalDeleted = Object.values(counts).reduce((s, v) => s + v, 0)
 
-    await supabase.from('audit_logs').insert({
+    supabase.from('audit_logs').insert({
       actor_id: req.user.id,
       action: 'nc.cycle_deleted',
       entity_type: 'nomination_cycle',
       entity_id: cycleId,
       description: `Nomination cycle "${cycle.title}" permanently deleted by ${req.user.name}. Cascade-deleted: ${totalDeleted} records (${Object.entries(counts).map(([k,v]) => `${v} ${k}`).join(', ')})`,
-    }).catch(() => {})
+    }).then(() => {}).catch(() => {})
 
     res.json({
       message: `Nomination cycle "${cycle.title}" permanently deleted.`,

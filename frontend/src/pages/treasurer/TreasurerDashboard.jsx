@@ -1,9 +1,56 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
-import { DollarSign, Clock, CheckCircle, FileText, TrendingUp, AlertCircle, TrendingDown, BarChart3, BookOpen, User, ArrowUpRight, ArrowDownRight, AlertTriangle } from 'lucide-react'
+import {
+  DollarSign, Clock, CheckCircle, FileText, TrendingUp, AlertCircle,
+  TrendingDown, BarChart3, BookOpen, User, ArrowUpRight, ArrowDownRight,
+  AlertTriangle, Calendar, MessageSquare, Settings, ChevronRight
+} from 'lucide-react'
+
+// ─── Quick Link Card ──────────────────────────────────────────
+function QuickLink({ to, icon: Icon, label, desc, color, badge }) {
+  return (
+    <Link to={to} className="card p-4 hover:shadow-md transition-all hover:border-orange/20 border border-transparent group">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+          <Icon size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-montserrat font-bold text-navy text-sm flex items-center gap-2">
+            {label}
+            {badge > 0 && (
+              <span className="bg-orange text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{badge}</span>
+            )}
+          </div>
+          <div className="text-xs text-gray-400 truncate">{desc}</div>
+        </div>
+        <ChevronRight size={14} className="text-gray-300 group-hover:text-orange transition-colors flex-shrink-0" />
+      </div>
+    </Link>
+  )
+}
+
+// ─── Stat Card ────────────────────────────────────────────────
+function StatCard({ label, value, icon: Icon, color, bg, sub }) {
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
+          <Icon size={20} className={color} />
+        </div>
+        <div>
+          <div className={`text-xl font-montserrat font-bold ${color}`}>{value}</div>
+          <div className="text-xs text-gray-400 font-semibold">{label}</div>
+          {sub && <div className="text-xs text-gray-300">{sub}</div>}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function TreasurerDashboard() {
+  const { user } = useAuth()
   const [summary, setSummary] = useState(null)
   const [pending, setPending] = useState([])
   const [balance, setBalance] = useState(null)
@@ -11,240 +58,237 @@ export default function TreasurerDashboard() {
   const [loading, setLoading] = useState(true)
   const [currentYear] = useState(`${new Date().getFullYear()}/${new Date().getFullYear() + 1}`)
 
+  const photoUrl = user?.photo_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'T')}&background=04003D&color=FF9700&size=200&bold=true`
+
   useEffect(() => {
     Promise.all([
-      api.get('/requisitions/stats/summary'),
-      api.get('/requisitions?status=endorsed&limit=5'),
-      api.get(`/treasury/balance?spiritual_year=${currentYear}`),
-      api.get(`/treasury/budgets/vs-actual?spiritual_year=${currentYear}`),
+      api.get('/requisitions/stats/summary').catch(() => ({ data: { summary: null } })),
+      api.get('/requisitions?status=endorsed&limit=5').catch(() => ({ data: { requisitions: [] } })),
+      api.get(`/treasury/balance?spiritual_year=${currentYear}`).catch(() => ({ data: null })),
+      api.get(`/treasury/budgets/vs-actual?spiritual_year=${currentYear}`).catch(() => ({ data: { vs_actual: [] } })),
     ]).then(([sumRes, pendRes, balRes, vaRes]) => {
       setSummary(sumRes.data.summary)
       setPending(pendRes.data.requisitions || [])
       setBalance(balRes.data)
-      setVsActual((vaRes.data.vs_actual || []).filter(m => m.over_budget || m.utilization >= 80).slice(0, 4))
-    }).catch(() => {}).finally(() => setLoading(false))
+      setVsActual((vaRes.data.vs_actual || []).filter(m => m.over_budget || (m.utilization || 0) >= 80).slice(0, 4))
+    }).finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" />
+    </div>
+  )
 
   const overBudget = vsActual.filter(m => m.over_budget)
 
   return (
-    <div>
-      {/* Header */}
-      <div className="page-header">
+    <div className="space-y-6">
+
+      {/* ── SECTION 1: Personal Welcome ── */}
+      <div className="bg-gradient-to-r from-navy to-[#0a0060] rounded-2xl p-6 flex items-center justify-between flex-wrap gap-4 shadow-lg">
         <div>
-          <h1 className="page-title">Treasurer Dashboard</h1>
-          <p className="page-subtitle">Financial overview — {currentYear}</p>
+          <div className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-1">
+            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+          <h1 className="text-2xl font-montserrat font-bold text-white mb-0.5">
+            Welcome, {user?.name?.split(' ')[0]}
+          </h1>
+          <p className="text-white/50 text-sm">CU Treasurer · {currentYear}</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Link to="/treasurer/profile" className="btn-outline btn-sm"><User size={14} /> My Profile</Link>
-          <Link to="/treasurer/reports" className="btn-primary btn-sm"><BarChart3 size={14} /> Reports</Link>
-        </div>
-      </div>
-
-      {/* Fund Balance Hero */}
-      {balance && (
-        <div className="bg-gradient-to-r from-navy to-[#0a0060] rounded-2xl p-6 mb-6 shadow-lg">
-          <div className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">Current Fund Balance — {currentYear}</div>
-          <div className={`text-4xl font-montserrat font-bold mb-4 ${parseFloat(balance.balance) >= 0 ? 'text-orange' : 'text-red'}`}>
-            KES {parseFloat(balance.balance || 0).toLocaleString()}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/10 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <ArrowUpRight size={14} className="text-teal" />
-                <span className="text-white/60 text-xs font-semibold">Total Income</span>
-              </div>
-              <div className="text-teal font-montserrat font-bold text-lg">KES {parseFloat(balance.total_income || 0).toLocaleString()}</div>
-            </div>
-            <div className="bg-white/10 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <ArrowDownRight size={14} className="text-orange" />
-                <span className="text-white/60 text-xs font-semibold">Total Disbursed</span>
-              </div>
-              <div className="text-orange font-montserrat font-bold text-lg">KES {parseFloat(balance.total_expenses || 0).toLocaleString()}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Over-budget Alerts */}
-      {overBudget.length > 0 && (
-        <div className="card p-4 mb-5 border-l-4 border-red bg-red/5">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle size={16} className="text-red" />
-            <span className="font-montserrat font-bold text-red text-sm">{overBudget.length} Ministry Over Budget</span>
-          </div>
-          <div className="space-y-1">
-            {overBudget.map(m => (
-              <div key={m.ministry} className="flex items-center justify-between text-sm">
-                <span className="text-navy font-semibold">{m.ministry}</span>
-                <span className="text-red font-bold">KES {Math.abs(m.remaining).toLocaleString()} over</span>
-              </div>
-            ))}
-          </div>
-          <Link to="/treasurer/budget" className="text-xs text-red font-semibold mt-2 inline-block hover:underline">View Budget Manager →</Link>
-        </div>
-      )}
-
-      {/* Requisition Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Total Requisitions', value: summary?.total_submitted || 0, icon: FileText, color: 'text-navy', bg: 'bg-navy/10' },
-          { label: 'Total Requested', value: `KES ${(summary?.total_requested || 0).toLocaleString()}`, icon: TrendingUp, color: 'text-orange', bg: 'bg-orange/10' },
-          { label: 'Total Approved', value: `KES ${(summary?.total_approved || 0).toLocaleString()}`, icon: CheckCircle, color: 'text-teal', bg: 'bg-teal/10' },
-          { label: 'Total Disbursed', value: `KES ${(summary?.total_disbursed || 0).toLocaleString()}`, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-100' },
-        ].map((s, i) => (
-          <div key={i} className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg}`}>
-                <s.icon size={20} className={s.color} />
-              </div>
-              <div>
-                <div className={`text-lg font-montserrat font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-gray-400 font-semibold">{s.label}</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Quick Navigation */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        {[
-          { to: '/treasurer/requisitions', icon: FileText, label: 'Requisitions', color: 'bg-orange/10 text-orange', desc: 'Review & disburse' },
-          { to: '/treasurer/income', icon: TrendingUp, label: 'Income Ledger', color: 'bg-teal/10 text-teal', desc: 'Record income' },
-          { to: '/treasurer/budget', icon: BarChart3, label: 'Budget Manager', color: 'bg-navy/10 text-navy', desc: 'Set allocations' },
-          { to: '/treasurer/ledger', icon: BookOpen, label: 'General Ledger', color: 'bg-purple-100 text-purple-600', desc: 'Full transactions' },
-        ].map((item, i) => (
-          <Link key={i} to={item.to} className="card p-4 hover:shadow-md transition-all hover:border-orange/20 border border-transparent">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${item.color}`}>
-              <item.icon size={18} />
-            </div>
-            <div className="font-montserrat font-bold text-navy text-sm">{item.label}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{item.desc}</div>
+        <div className="flex items-center gap-3">
+          <Link to="/treasurer/profile" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-sm font-semibold transition-all">
+            <User size={14} /> My Profile
           </Link>
-        ))}
+          <img src={photoUrl} alt={user?.name} className="w-12 h-12 rounded-full object-cover border-2 border-orange/50" />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Requisition Status Breakdown */}
-        <div className="card">
-          <div className="card-header"><h2 className="font-montserrat font-bold text-navy text-sm">Requisitions by Status</h2></div>
-          <div className="card-body space-y-2">
-            {Object.entries({
-              pending: { label: 'Pending', color: 'bg-gray-200', text: 'text-gray-600' },
-              endorsed: { label: 'Endorsed (Awaiting Review)', color: 'bg-orange', text: 'text-white' },
-              under_review: { label: 'Under Review', color: 'bg-orange/60', text: 'text-white' },
-              approved: { label: 'Approved', color: 'bg-teal', text: 'text-white' },
-              partially_approved: { label: 'Partially Approved', color: 'bg-yellow-400', text: 'text-white' },
-              rejected: { label: 'Rejected', color: 'bg-red', text: 'text-white' },
-              disbursed: { label: 'Disbursed', color: 'bg-green-500', text: 'text-white' },
-            }).map(([status, cfg]) => {
-              const count = summary?.by_status?.[status] || 0
-              const total = summary?.total_submitted || 1
-              const pct = Math.round(count / total * 100)
-              return (
-                <div key={status} className="flex items-center gap-3">
-                  <div className="w-32 text-xs text-gray-500 flex-shrink-0">{cfg.label}</div>
-                  <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                    <div className={`h-full ${cfg.color} rounded-full flex items-center justify-end pr-2 transition-all`} style={{ width: `${Math.max(pct, count > 0 ? 8 : 0)}%` }}>
-                      {count > 0 && <span className={`text-xs font-bold ${cfg.text}`}>{count}</span>}
-                    </div>
+      {/* ── SECTION 2: Fund Balance ── */}
+      <div>
+        <h2 className="font-montserrat font-bold text-navy text-sm uppercase tracking-wide mb-3 flex items-center gap-2">
+          <DollarSign size={14} className="text-orange" /> Fund Balance — {currentYear}
+        </h2>
+        {balance ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="card p-5 border-l-4 border-teal">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-teal/10 rounded-xl flex items-center justify-center">
+                  <ArrowUpRight size={20} className="text-teal" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Total Income</div>
+                  <div className="text-xl font-montserrat font-bold text-teal">
+                    KES {parseFloat(balance.total_income || 0).toLocaleString()}
                   </div>
-                  <div className="w-8 text-xs text-gray-400 text-right">{pct}%</div>
                 </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Pending Review */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="font-montserrat font-bold text-navy text-sm">
-              <AlertCircle size={14} className="inline mr-1 text-orange" />
-              Awaiting Your Review
-            </h2>
-            <Link to="/treasurer/requisitions?status=endorsed" className="btn-outline btn-sm text-xs">View All</Link>
-          </div>
-          <div>
-            {pending.length === 0 ? (
-              <div className="text-center py-6 text-gray-400 text-sm">
-                <CheckCircle size={24} className="mx-auto mb-2 text-teal" />
-                All caught up! No requisitions awaiting review.
               </div>
-            ) : pending.map(r => (
-              <Link key={r.id} to="/treasurer/requisitions" className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-all">
-                <div className="w-8 h-8 bg-orange/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <FileText size={14} className="text-orange" />
+            </div>
+            <div className="card p-5 border-l-4 border-orange">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange/10 rounded-xl flex items-center justify-center">
+                  <ArrowDownRight size={20} className="text-orange" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-navy text-sm truncate">{r.title}</div>
-                  <div className="text-xs text-gray-400">{r.requisition_number} · {r.ministry || 'General'}</div>
+                <div>
+                  <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Total Disbursed</div>
+                  <div className="text-xl font-montserrat font-bold text-orange">
+                    KES {parseFloat(balance.total_expenses || 0).toLocaleString()}
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-bold text-orange text-sm">KES {parseFloat(r.total_requested).toLocaleString()}</div>
-                  <div className="text-xs text-gray-400">Endorsed</div>
+              </div>
+            </div>
+            <div className={`card p-5 border-l-4 ${parseFloat(balance.balance || 0) >= 0 ? 'border-green-500' : 'border-red'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${parseFloat(balance.balance || 0) >= 0 ? 'bg-green-100' : 'bg-red/10'}`}>
+                  <DollarSign size={20} className={parseFloat(balance.balance || 0) >= 0 ? 'text-green-600' : 'text-red'} />
                 </div>
-              </Link>
-            ))}
+                <div>
+                  <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Current Balance</div>
+                  <div className={`text-xl font-montserrat font-bold ${parseFloat(balance.balance || 0) >= 0 ? 'text-green-600' : 'text-red'}`}>
+                    KES {parseFloat(balance.balance || 0).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="card p-4 text-center text-gray-400 text-sm">
+            No balance data yet. Record income entries to see the fund balance.
+          </div>
+        )}
+      </div>
+
+      {/* ── SECTION 3: Requisition Stats ── */}
+      {summary && (
+        <div>
+          <h2 className="font-montserrat font-bold text-navy text-sm uppercase tracking-wide mb-3 flex items-center gap-2">
+            <FileText size={14} className="text-orange" /> Requisitions Overview
+          </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Total Submitted" value={summary.total_submitted || 0} icon={FileText} color="text-navy" bg="bg-navy/10" />
+            <StatCard label="Total Requested" value={`KES ${(summary.total_requested || 0).toLocaleString()}`} icon={TrendingUp} color="text-orange" bg="bg-orange/10" />
+            <StatCard label="Total Approved" value={`KES ${(summary.total_approved || 0).toLocaleString()}`} icon={CheckCircle} color="text-teal" bg="bg-teal/10" />
+            <StatCard label="Total Disbursed" value={`KES ${(summary.total_disbursed || 0).toLocaleString()}`} icon={DollarSign} color="text-green-600" bg="bg-green-100" />
           </div>
         </div>
+      )}
 
-        {/* Budget Utilization Alerts */}
-        {vsActual.length > 0 && (
-          <div className="card lg:col-span-2">
-            <div className="card-header">
-              <h2 className="font-montserrat font-bold text-navy text-sm">Budget Utilization Alerts</h2>
-              <Link to="/treasurer/budget" className="btn-outline btn-sm text-xs">Full Budget</Link>
-            </div>
+      {/* ── SECTION 4: Alerts ── */}
+      {(overBudget.length > 0 || pending.length > 0) && (
+        <div>
+          <h2 className="font-montserrat font-bold text-navy text-sm uppercase tracking-wide mb-3 flex items-center gap-2">
+            <AlertTriangle size={14} className="text-red" /> Alerts
+          </h2>
+          <div className="space-y-3">
+            {overBudget.length > 0 && (
+              <div className="card p-4 border-l-4 border-red bg-red/5">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle size={15} className="text-red" />
+                  <span className="font-montserrat font-bold text-red text-sm">{overBudget.length} {overBudget.length === 1 ? 'Ministry' : 'Ministries'} Over Budget</span>
+                </div>
+                <div className="space-y-1">
+                  {overBudget.map(m => (
+                    <div key={m.ministry} className="flex items-center justify-between text-sm">
+                      <span className="text-navy font-semibold">{m.ministry}</span>
+                      <span className="text-red font-bold">KES {Math.abs(m.remaining || 0).toLocaleString()} over</span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/treasurer/budget" className="text-xs text-red font-semibold mt-2 inline-block hover:underline">
+                  View Budget Manager →
+                </Link>
+              </div>
+            )}
+            {pending.length > 0 && (
+              <div className="card p-4 border-l-4 border-orange bg-orange/5">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle size={15} className="text-orange" />
+                  <span className="font-montserrat font-bold text-orange text-sm">{pending.length} Requisition{pending.length > 1 ? 's' : ''} Awaiting Your Review</span>
+                </div>
+                <div className="space-y-1">
+                  {pending.slice(0, 3).map(r => (
+                    <div key={r.id} className="flex items-center justify-between text-sm">
+                      <span className="text-navy font-semibold truncate flex-1 mr-2">{r.title}</span>
+                      <span className="text-orange font-bold flex-shrink-0">KES {parseFloat(r.total_requested || 0).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/treasurer/requisitions" className="text-xs text-orange font-semibold mt-2 inline-block hover:underline">
+                  Review Requisitions →
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── SECTION 5: Treasury Modules ── */}
+      <div>
+        <h2 className="font-montserrat font-bold text-navy text-sm uppercase tracking-wide mb-3 flex items-center gap-2">
+          <BarChart3 size={14} className="text-orange" /> Treasury Modules
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <QuickLink to="/treasurer/requisitions" icon={FileText} label="Requisitions" desc="Review, approve & disburse funds" color="bg-orange/10 text-orange" badge={pending.length} />
+          <QuickLink to="/treasurer/income" icon={TrendingUp} label="Income Ledger" desc="Record offerings, fundraising & donations" color="bg-teal/10 text-teal" />
+          <QuickLink to="/treasurer/budget" icon={BarChart3} label="Budget Manager" desc="Set & track ministry allocations" color="bg-navy/10 text-navy" />
+          <QuickLink to="/treasurer/ledger" icon={BookOpen} label="General Ledger" desc="Full transaction history & running balance" color="bg-purple-100 text-purple-600" />
+          <QuickLink to="/treasurer/reports" icon={FileText} label="Financial Reports" desc="Download & print official reports" color="bg-green-100 text-green-600" />
+          <QuickLink to="/treasurer/years" icon={Calendar} label="Financial Years" desc="Manage & close financial years" color="bg-blue-100 text-blue-600" />
+        </div>
+      </div>
+
+      {/* ── SECTION 6: Other Access ── */}
+      <div>
+        <h2 className="font-montserrat font-bold text-navy text-sm uppercase tracking-wide mb-3 flex items-center gap-2">
+          <Settings size={14} className="text-gray-400" /> Other Access
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <QuickLink to="/analytics" icon={BarChart3} label="Analytics & Reports" desc="Member statistics and system reports" color="bg-gray-100 text-gray-600" />
+          <QuickLink to="/admin/messages" icon={MessageSquare} label="Messages" desc="View and reply to member messages" color="bg-gray-100 text-gray-600" />
+        </div>
+      </div>
+
+      {/* ── SECTION 7: Budget Utilization Alerts ── */}
+      {vsActual.length > 0 && (
+        <div>
+          <h2 className="font-montserrat font-bold text-navy text-sm uppercase tracking-wide mb-3 flex items-center gap-2">
+            <TrendingDown size={14} className="text-orange" /> Budget Utilization Alerts
+          </h2>
+          <div className="card">
             <div className="card-body space-y-3">
               {vsActual.map(m => (
                 <div key={m.ministry} className="flex items-center gap-3">
-                  <div className="w-40 text-sm font-semibold text-navy truncate flex-shrink-0">{m.ministry.replace(' Ministry', '')}</div>
-                  <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${m.over_budget ? 'bg-red' : m.utilization >= 90 ? 'bg-orange' : 'bg-yellow-400'}`}
+                  <div className="w-36 text-sm font-semibold text-navy truncate flex-shrink-0">
+                    {m.ministry.replace(' Ministry', '')}
+                  </div>
+                  <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${m.over_budget ? 'bg-red' : (m.utilization || 0) >= 90 ? 'bg-orange' : 'bg-yellow-400'}`}
                       style={{ width: `${Math.min(m.utilization || 0, 100)}%` }} />
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`text-xs font-bold w-10 text-right ${m.over_budget ? 'text-red' : 'text-orange'}`}>{m.utilization}%</span>
+                    <span className={`text-xs font-bold w-10 text-right ${m.over_budget ? 'text-red' : 'text-orange'}`}>
+                      {m.utilization || 0}%
+                    </span>
                     {m.over_budget && <AlertTriangle size={13} className="text-red" />}
                   </div>
                   <div className={`text-xs font-semibold w-28 text-right flex-shrink-0 ${m.over_budget ? 'text-red' : 'text-orange'}`}>
-                    {m.over_budget ? `KES ${Math.abs(m.remaining).toLocaleString()} over` : `KES ${m.remaining.toLocaleString()} left`}
+                    {m.over_budget
+                      ? `KES ${Math.abs(m.remaining || 0).toLocaleString()} over`
+                      : `KES ${(m.remaining || 0).toLocaleString()} left`}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Ministry Spending */}
-        {summary?.by_ministry && Object.keys(summary.by_ministry).length > 0 && (
-          <div className="card lg:col-span-2">
-            <div className="card-header"><h2 className="font-montserrat font-bold text-navy text-sm">Spending by Ministry</h2></div>
-            <div className="card-body">
-              <div className="space-y-2">
-                {Object.entries(summary.by_ministry).sort((a, b) => b[1] - a[1]).map(([ministry, amount]) => {
-                  const maxAmount = Math.max(...Object.values(summary.by_ministry))
-                  const pct = Math.round(amount / maxAmount * 100)
-                  return (
-                    <div key={ministry} className="flex items-center gap-3">
-                      <div className="w-40 text-xs text-gray-600 truncate flex-shrink-0">{ministry}</div>
-                      <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-navy to-orange rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className="w-28 text-xs font-semibold text-navy text-right">KES {amount.toLocaleString()}</div>
-                    </div>
-                  )
-                })}
-              </div>
+            <div className="px-5 pb-3">
+              <Link to="/treasurer/budget" className="text-xs text-orange font-semibold hover:underline">
+                View Full Budget Manager →
+              </Link>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   )
 }

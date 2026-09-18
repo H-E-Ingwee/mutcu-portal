@@ -157,19 +157,43 @@ router.delete('/:id', authenticate, requireRole('super_admin', 'ec_admin', 'cu_s
       return res.status(403).json({ error: 'Cannot delete admin accounts' });
     }
 
-    
+    // Soft delete — anonymize PII, keep record for audit
+    const updatePayload = {
+      enrollment_status: 'deleted',
+      is_active: false,
+      email: `deleted_${user.id}@mutcu.deleted`,
+      phone: null,
+      photo_url: null,
+      photo_public_id: null,
+      pending_changes: null,
+      updated_at: new Date().toISOString(),
+    }
 
-    // Audit log
-    await supabase.from('audit_logs').insert({
+    // Try with schema_v7 columns first, fall back if they don't exist
+    let { error: deleteError } = await supabase.from('users').update({
+      ...updatePayload,
+      deleted_at: new Date().toISOString(),
+      deletion_reason: reason || 'Deleted by admin',
+    }).eq('id', req.params.id)
+
+    if (deleteError) {
+      // Fallback: update without schema_v7 columns
+      const { error: fallbackError } = await supabase.from('users').update(updatePayload).eq('id', req.params.id)
+      if (fallbackError) throw fallbackError
+    }
+
+    // Audit log — use then/catch pattern for Supabase v2 compatibility
+    supabase.from('audit_logs').insert({
       actor_id: req.user.id,
       action: 'user.deleted',
       entity_type: 'user',
       entity_id: req.params.id,
-      description: `Account deleted by ${req.user.name}. Reason: ${reason || 'Not specified'}. Original email: ${user.email}`,
-    }).catch(() => {});
+      description: `Account for ${user.name} deleted by ${req.user.name}. Reason: ${reason || 'Not specified'}. Original email: ${user.email}`,
+    }).then(() => {}).catch(() => {})
 
     res.json({ message: `Account for ${user.name} has been deleted successfully` });
   } catch (err) {
+    console.error('[USER DELETE ERROR]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
