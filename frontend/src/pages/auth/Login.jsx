@@ -31,7 +31,8 @@ export default function Login() {
         navigate('/change-password', { replace: true })
       } else if (!data.user.email_verified) {
         navigate('/verify-email', { replace: true })
-      
+      }
+    } catch (err) {
       const code = err.response?.data?.code
       const msg  = err.response?.data?.error || 'Login failed. Please check your credentials.'
 
@@ -42,6 +43,7 @@ export default function Login() {
         setError(msg)
         toast.error(msg)
       }
+    } finally {
       setLoading(false)
     }
   }
