@@ -5,86 +5,11 @@ import api from '../lib/api'
 import {
   FileText, Award, CreditCard, Users, Settings, BarChart3,
   Clock, CheckCircle, Megaphone, Send, History, CalendarDays,
-  Church, Bell, BookOpen, ShieldAlert, DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight
+  Church, Bell, BookOpen, ShieldAlert, DollarSign, TrendingUp,
+  ArrowUpRight, ArrowDownRight, AlertTriangle, X
 } from 'lucide-react'
 
-function CountdownTimer({ targetDate, label }) {
-  const [timeLeft, setTimeLeft] = useState({})
-  useEffect(() => {
-    const calc = () => {
-      const diff = new Date(targetDate) - new Date()
-      if (diff <= 0) return setTimeLeft({ expired: true })
-      setTimeLeft({ days: Math.floor(diff / 86400000), hours: Math.floor((diff % 86400000) / 3600000), minutes: Math.floor((diff % 3600000) / 60000) })
-    }
-    calc()
-    const interval = setInterval(calc, 60000)
-    return () => clearInterval(interval)
-  }, [targetDate])
-  if (timeLeft.expired) return <span className="text-red text-xs font-bold">Closed</span>
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-gray-400">{label}:</span>
-      <div className="flex gap-1">
-        {timeLeft.days > 0 && <span className="bg-navy text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.days}d</span>}
-        <span className="bg-orange text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.hours}h</span>
-        <span className="bg-orange/70 text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.minutes}m</span>
-      </div>
-
-      {/* ── Treasury Section (Treasurer only) ── */}
-      {isTreasurer && isTreasurer() && (
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-montserrat font-bold text-navy flex items-center gap-2">
-              <DollarSign size={16} className="text-orange" />
-              Treasury — {currentYear}
-            </h2>
-            <Link to="/treasurer" className="text-xs text-orange font-semibold hover:underline">
-              Full Treasury Dashboard →
-            </Link>
-          </div>
-          {treasuryBalance && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <div className="card p-4 border-l-4 border-teal">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-teal/10 rounded-xl flex items-center justify-center flex-shrink-0"><ArrowUpRight size={18} className="text-teal" /></div>
-                  <div><div className="text-xs text-gray-400 font-semibold">Total Income</div><div className="text-lg font-montserrat font-bold text-teal">KES {parseFloat(treasuryBalance.total_income || 0).toLocaleString()}</div></div>
-                </div>
-              </div>
-              <div className="card p-4 border-l-4 border-orange">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-orange/10 rounded-xl flex items-center justify-center flex-shrink-0"><ArrowDownRight size={18} className="text-orange" /></div>
-                  <div><div className="text-xs text-gray-400 font-semibold">Total Disbursed</div><div className="text-lg font-montserrat font-bold text-orange">KES {parseFloat(treasuryBalance.total_expenses || 0).toLocaleString()}</div></div>
-                </div>
-              </div>
-              <div className={`card p-4 border-l-4 ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'border-green-500' : 'border-red'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'bg-green-100' : 'bg-red/10'}`}><DollarSign size={18} className={parseFloat(treasuryBalance.balance || 0) >= 0 ? 'text-green-600' : 'text-red'} /></div>
-                  <div><div className="text-xs text-gray-400 font-semibold">Current Balance</div><div className={`text-lg font-montserrat font-bold ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'text-green-600' : 'text-red'}`}>KES {parseFloat(treasuryBalance.balance || 0).toLocaleString()}</div></div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { to: '/treasurer/requisitions', icon: FileText, label: 'Requisitions', color: 'bg-orange/10 text-orange', badge: treasuryPending },
-              { to: '/treasurer/income', icon: TrendingUp, label: 'Income Ledger', color: 'bg-teal/10 text-teal' },
-              { to: '/treasurer/budget', icon: BarChart3, label: 'Budget Manager', color: 'bg-navy/10 text-navy' },
-              { to: '/treasurer/reports', icon: FileText, label: 'Financial Reports', color: 'bg-green-100 text-green-600' },
-            ].map((item, i) => (
-              <Link key={i} to={item.to} className="flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-orange/30 hover:bg-orange/5 transition-all text-center relative">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.color}`}><item.icon size={18} /></div>
-                <span className="text-xs font-montserrat font-bold text-navy">{item.label}</span>
-                {item.badge > 0 && <span className="absolute -top-1 -right-1 bg-orange text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{item.badge}</span>}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Skeleton loader for pending members
+// ─── Pending member skeleton ──────────────────────────────────
 function PendingMemberSkeleton({ user }) {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -113,7 +38,6 @@ function PendingMemberSkeleton({ user }) {
             </div>
           </div>
         </div>
-
         <div className="card p-5">
           <h3 className="font-montserrat font-bold text-navy text-sm mb-3">Available While Pending</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -127,77 +51,205 @@ function PendingMemberSkeleton({ user }) {
             </Link>
           </div>
         </div>
-
-        <div className="card p-5">
-          <h3 className="font-montserrat font-bold text-gray-400 text-sm mb-3">Available After Approval</h3>
-          <div className="grid grid-cols-3 gap-2 opacity-40 pointer-events-none select-none">
-            {[
-              { icon: FileText, label: 'Nominations' },
-              { icon: Award, label: 'Nominees' },
-              { icon: CreditCard, label: 'Member Card' },
-              { icon: Megaphone, label: 'Announcements' },
-              { icon: History, label: 'Leadership' },
-              { icon: CalendarDays, label: 'Calendar' },
-            ].map((a, i) => (
-              <div key={i} className="flex flex-col items-center gap-1 p-2 rounded-xl border border-gray-100 text-center">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100"><a.icon size={16} className="text-gray-400" /></div>
-                <span className="text-xs font-montserrat font-bold text-gray-400">{a.label}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-center gap-2 mt-3">
-            <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center">
-              <div className="w-2 h-2 rounded-full bg-gray-400" />
-            </div>
-            <span className="text-xs text-gray-400">Locked until membership approved</span>
-          </div>
-        </div>
       </div>
     </div>
   )
 }
 
+// ─── Countdown Timer ──────────────────────────────────────────
+function CountdownTimer({ targetDate, label }) {
+  const [timeLeft, setTimeLeft] = useState({})
+  useEffect(() => {
+    const calc = () => {
+      const diff = new Date(targetDate) - new Date()
+      if (diff <= 0) return setTimeLeft({ expired: true })
+      setTimeLeft({ days: Math.floor(diff / 86400000), hours: Math.floor((diff % 86400000) / 3600000), minutes: Math.floor((diff % 3600000) / 60000) })
+    }
+    calc()
+    const interval = setInterval(calc, 60000)
+    return () => clearInterval(interval)
+  }, [targetDate])
+  if (timeLeft.expired) return <span className="text-red text-xs font-bold">Closed</span>
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-400">{label}:</span>
+      <div className="flex gap-1">
+        {timeLeft.days > 0 && <span className="bg-navy text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.days}d</span>}
+        <span className="bg-orange text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.hours}h</span>
+        <span className="bg-orange/70 text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.minutes}m</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Treasurer Alert Banner ───────────────────────────────────
+function TreasurerAlerts({ alerts, onDismiss }) {
+  if (!alerts || alerts.length === 0) return null
+  return (
+    <div className="space-y-2 mb-5">
+      {alerts.map((alert, i) => (
+        <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${
+          alert.level === 'critical' ? 'bg-red/5 border-red/20' :
+          alert.level === 'warning'  ? 'bg-orange/5 border-orange/20' :
+          'bg-blue-50 border-blue-200'
+        }`}>
+          <AlertTriangle size={15} className={`flex-shrink-0 mt-0.5 ${
+            alert.level === 'critical' ? 'text-red' :
+            alert.level === 'warning'  ? 'text-orange' : 'text-blue-500'
+          }`} />
+          <div className="flex-1 min-w-0">
+            <div className={`text-xs font-bold mb-0.5 ${
+              alert.level === 'critical' ? 'text-red' :
+              alert.level === 'warning'  ? 'text-orange' : 'text-blue-600'
+            }`}>{alert.title}</div>
+            <div className="text-xs text-gray-600">{alert.message}</div>
+          </div>
+          {alert.link && (
+            <Link to={alert.link} className="text-xs font-semibold text-orange hover:underline flex-shrink-0">
+              View →
+            </Link>
+          )}
+          <button onClick={() => onDismiss(i)} className="text-gray-300 hover:text-gray-500 flex-shrink-0 p-0.5">
+            <X size={13} />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────
 export default function Dashboard() {
   const { user, isAdmin, isSecretary, isNC, canManageRequisitions, isTreasurer } = useAuth()
   const navigate = useNavigate()
+
   const [cycle, setCycle] = useState(null)
   const [stats, setStats] = useState({ total_members: 0, active_members: 0, pending_members: 0, ministry_count: 0 })
   const [currentEC, setCurrentEC] = useState([])
   const [announcements, setAnnouncements] = useState([])
   const [ministryContent, setMinistryContent] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Treasury state
   const [treasuryBalance, setTreasuryBalance] = useState(null)
   const [treasuryPending, setTreasuryPending] = useState(0)
+  const [treasuryAlerts, setTreasuryAlerts] = useState([])
+  const [dismissedAlerts, setDismissedAlerts] = useState([])
   const [currentYear] = useState(`${new Date().getFullYear()}/${new Date().getFullYear() + 1}`)
 
-  
-
-  const photoUrl = user?.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
+  const photoUrl = user?.photo_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
 
   const isPending = user?.enrollment_status === 'pending'
 
-  // Show skeleton for pending members (must be after all hooks)
+  // NC Chair redirect
+  useEffect(() => {
+    if (user?.role === 'nc_chair') navigate('/nc', { replace: true })
+  }, [user])
+
+  // Main data fetch
   useEffect(() => {
     const fetchData = async () => {
+      // Nominations cycle
       try {
         const cycleRes = await api.get('/nominations/cycle')
         setCycle(cycleRes.data?.cycle || null)
       } catch {}
+
+      // Announcements
       try {
         const annRes = await api.get('/announcements')
         setAnnouncements((annRes.data?.announcements || []).slice(0, 3))
       } catch {}
+
+      // Ministry content
       if (user?.primary_ministry || user?.secondary_ministry) {
         try {
           const mcRes = await api.get('/ministry-content/my')
           setMinistryContent(mcRes.data?.content || [])
         } catch {}
       }
-      
+
+      // Admin stats
+      if (isAdmin && isAdmin()) {
+        try {
+          const adminRes = await api.get('/admin/dashboard')
+          if (adminRes.data?.stats) setStats(adminRes.data.stats)
+          if (adminRes.data?.currentEC) setCurrentEC(adminRes.data.currentEC)
+        } catch {}
+      }
+
+      // Treasury data + alerts
+      if (isTreasurer && isTreasurer()) {
+        const alerts = []
+        try {
+          const [balRes, pendRes, vaRes] = await Promise.all([
+            api.get(`/treasury/balance?spiritual_year=${currentYear}`),
+            api.get('/requisitions?status=endorsed&limit=1'),
+            api.get(`/treasury/budgets/vs-actual?spiritual_year=${currentYear}`),
+          ])
+          const bal = balRes.data
+          setTreasuryBalance(bal)
+          const pendCount = pendRes.data.total || 0
+          setTreasuryPending(pendCount)
+
+          // Alert: pending requisitions
+          if (pendCount > 0) {
+            alerts.push({
+              level: 'warning',
+              title: `${pendCount} Requisition${pendCount > 1 ? 's' : ''} Awaiting Your Review`,
+              message: `${pendCount} endorsed requisition${pendCount > 1 ? 's are' : ' is'} waiting for your review and approval.`,
+              link: '/treasurer/requisitions',
+            })
+          }
+
+          // Alert: low balance
+          const balance = parseFloat(bal?.balance || 0)
+          const totalIncome = parseFloat(bal?.total_income || 0)
+          if (totalIncome > 0 && balance < totalIncome * 0.1) {
+            alerts.push({
+              level: 'critical',
+              title: 'Low Fund Balance',
+              message: `Current balance KES ${balance.toLocaleString()} is below 10% of total income. Review expenditure.`,
+              link: '/treasurer/ledger',
+            })
+          }
+
+          // Alert: over-budget ministries
+          const vsActual = vaRes.data.vs_actual || []
+          const overBudget = vsActual.filter(m => m.over_budget)
+          const nearLimit = vsActual.filter(m => !m.over_budget && (m.utilization || 0) >= 80)
+
+          overBudget.forEach(m => {
+            alerts.push({
+              level: 'critical',
+              title: `${m.ministry} — Over Budget`,
+              message: `Spent KES ${(m.spent || 0).toLocaleString()} against KES ${(m.allocated || 0).toLocaleString()} budget (${m.utilization}%).`,
+              link: '/treasurer/budget',
+            })
+          })
+
+          nearLimit.slice(0, 2).forEach(m => {
+            alerts.push({
+              level: 'warning',
+              title: `${m.ministry} — ${m.utilization}% of Budget Used`,
+              message: `Only KES ${(m.remaining || 0).toLocaleString()} remaining. Monitor spending closely.`,
+              link: '/treasurer/budget',
+            })
+          })
+        } catch {}
+        setTreasuryAlerts(alerts)
+      }
+
+      setLoading(false)
     }
+
     if (!isPending) fetchData()
     else setLoading(false)
   }, [])
+
+  const dismissAlert = (idx) => setDismissedAlerts(prev => [...prev, idx])
+  const visibleAlerts = treasuryAlerts.filter((_, i) => !dismissedAlerts.includes(i))
 
   if (isPending) return <PendingMemberSkeleton user={user} />
 
@@ -227,6 +279,17 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {/* Treasurer notification bell */}
+          {isTreasurer && isTreasurer() && visibleAlerts.length > 0 && (
+            <div className="relative">
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                <Bell size={18} className="text-white" />
+              </div>
+              <span className="absolute -top-1 -right-1 bg-red text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {visibleAlerts.length}
+              </span>
+            </div>
+          )}
           {cycle && (
             <div className="text-right hidden sm:block">
               <div className="text-white/40 text-xs font-montserrat font-semibold uppercase tracking-wider">Active Cycle</div>
@@ -236,6 +299,11 @@ export default function Dashboard() {
           <img src={photoUrl} alt={user?.name} className="w-14 h-14 rounded-full object-cover border-2 border-orange/50" />
         </div>
       </div>
+
+      {/* Treasurer Alerts */}
+      {isTreasurer && isTreasurer() && (
+        <TreasurerAlerts alerts={visibleAlerts} onDismiss={dismissAlert} />
+      )}
 
       {/* Active Cycle Banner */}
       {cycle && (
@@ -283,7 +351,7 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quick Actions */}
+        {/* Quick Actions + Content */}
         <div className="lg:col-span-2 space-y-5">
           <div className="card">
             <div className="card-header"><h2 className="font-montserrat font-bold text-navy">Quick Actions</h2></div>
@@ -315,15 +383,13 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Ministry Dashboard Section */}
+          {/* Ministry Dashboard */}
           {userMinistries.length > 0 && (
             <div className="card">
               <div className="card-header">
                 <h2 className="font-montserrat font-bold text-navy">My Ministries</h2>
                 <div className="flex gap-1">
-                  {userMinistries.map(m => (
-                    <span key={m} className="badge badge-teal text-xs">{m.replace(' Ministry', '')}</span>
-                  ))}
+                  {userMinistries.map(m => <span key={m} className="badge badge-teal text-xs">{m.replace(' Ministry', '')}</span>)}
                 </div>
               </div>
               <div className="card-body space-y-3">
@@ -337,7 +403,6 @@ export default function Dashboard() {
                           <div className="text-sm font-semibold text-navy">{m.title}</div>
                           {m.meeting_day && <div className="text-xs text-gray-500">{m.meeting_day}{m.meeting_time ? ` at ${m.meeting_time}` : ''}{m.meeting_venue ? ` — ${m.meeting_venue}` : ''}</div>}
                         </div>
-                        <span className="ml-auto text-xs text-gray-400">{m.ministry_name.replace(' Ministry', '')}</span>
                       </div>
                     ))}
                   </div>
@@ -353,14 +418,12 @@ export default function Dashboard() {
                     ))}
                   </div>
                 )}
-                {ministryContent.length === 0 && (
-                  <p className="text-xs text-gray-400 text-center py-2">No ministry updates yet. Check back soon.</p>
-                )}
+                {ministryContent.length === 0 && <p className="text-xs text-gray-400 text-center py-2">No ministry updates yet.</p>}
               </div>
             </div>
           )}
 
-          {/* Recent Announcements */}
+          {/* Announcements */}
           {announcements.length > 0 && (
             <div className="card">
               <div className="card-header"><h2 className="font-montserrat font-bold text-navy">Latest Announcements</h2><Link to="/announcements" className="btn-outline btn-sm text-xs">View All</Link></div>
@@ -371,6 +434,54 @@ export default function Dashboard() {
                     <div className="text-gray-500 text-xs line-clamp-2">{a.body}</div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Treasury Section — Treasurer only */}
+          {isTreasurer && isTreasurer() && (
+            <div className="card border-l-4 border-orange">
+              <div className="card-header">
+                <h2 className="font-montserrat font-bold text-navy flex items-center gap-2">
+                  <DollarSign size={15} className="text-orange" /> Treasury — {currentYear}
+                </h2>
+                <Link to="/treasurer" className="btn-outline btn-sm text-xs">Full Dashboard →</Link>
+              </div>
+              <div className="card-body">
+                {/* Balance */}
+                {treasuryBalance && (
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="text-center bg-teal/5 rounded-xl p-3">
+                      <div className="text-xs text-gray-400 mb-1">Income</div>
+                      <div className="font-montserrat font-bold text-teal text-sm">KES {parseFloat(treasuryBalance.total_income || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="text-center bg-orange/5 rounded-xl p-3">
+                      <div className="text-xs text-gray-400 mb-1">Disbursed</div>
+                      <div className="font-montserrat font-bold text-orange text-sm">KES {parseFloat(treasuryBalance.total_expenses || 0).toLocaleString()}</div>
+                    </div>
+                    <div className={`text-center rounded-xl p-3 ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'bg-green-50' : 'bg-red/5'}`}>
+                      <div className="text-xs text-gray-400 mb-1">Balance</div>
+                      <div className={`font-montserrat font-bold text-sm ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'text-green-600' : 'text-red'}`}>
+                        KES {parseFloat(treasuryBalance.balance || 0).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Quick links */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { to: '/treasurer/requisitions', icon: FileText, label: 'Requisitions', color: 'bg-orange/10 text-orange', badge: treasuryPending },
+                    { to: '/treasurer/income', icon: TrendingUp, label: 'Income Ledger', color: 'bg-teal/10 text-teal' },
+                    { to: '/treasurer/budget', icon: BarChart3, label: 'Budget Manager', color: 'bg-navy/10 text-navy' },
+                    { to: '/treasurer/reports', icon: FileText, label: 'Reports', color: 'bg-green-100 text-green-600' },
+                  ].map((item, i) => (
+                    <Link key={i} to={item.to} className="flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-orange/30 hover:bg-orange/5 transition-all text-center relative">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${item.color}`}><item.icon size={16} /></div>
+                      <span className="text-xs font-montserrat font-bold text-navy">{item.label}</span>
+                      {item.badge > 0 && <span className="absolute -top-1 -right-1 bg-orange text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{item.badge}</span>}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -394,12 +505,8 @@ export default function Dashboard() {
                   <span className="font-montserrat font-bold text-orange text-sm">{user.mutcu_number}</span>
                 </div>
               )}
-              {user?.primary_ministry && (
-                <div className="text-xs text-gray-400">{user.primary_ministry}</div>
-              )}
-              {user?.secondary_ministry && (
-                <div className="text-xs text-gray-400">{user.secondary_ministry}</div>
-              )}
+              {user?.primary_ministry && <div className="text-xs text-gray-400">{user.primary_ministry}</div>}
+              {user?.secondary_ministry && <div className="text-xs text-gray-400">{user.secondary_ministry}</div>}
               {user?.pending_changes && (
                 <div className="mt-2 bg-orange/5 border border-orange/20 rounded-lg p-2 text-xs text-orange">
                   ⏳ Profile changes pending secretary approval
