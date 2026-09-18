@@ -528,8 +528,6 @@ export default function BudgetManager() {
             </table>
           </div>
         </div>
-      )}
-
       {/* ── Budget Entries List ── */}
       <div className="card">
         <div className="card-header">
