@@ -5,7 +5,7 @@ import api from '../lib/api'
 import {
   FileText, Award, CreditCard, Users, Settings, BarChart3,
   Clock, CheckCircle, Megaphone, Send, History, CalendarDays,
-  Church, Bell, BookOpen, ShieldAlert
+  Church, Bell, BookOpen, ShieldAlert, DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight
 } from 'lucide-react'
 
 function CountdownTimer({ targetDate, label }) {
@@ -29,6 +29,57 @@ function CountdownTimer({ targetDate, label }) {
         <span className="bg-orange text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.hours}h</span>
         <span className="bg-orange/70 text-white text-xs font-bold px-1.5 py-0.5 rounded">{timeLeft.minutes}m</span>
       </div>
+
+      {/* ── Treasury Section (Treasurer only) ── */}
+      {isTreasurer && isTreasurer() && (
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-montserrat font-bold text-navy flex items-center gap-2">
+              <DollarSign size={16} className="text-orange" />
+              Treasury — {currentYear}
+            </h2>
+            <Link to="/treasurer" className="text-xs text-orange font-semibold hover:underline">
+              Full Treasury Dashboard →
+            </Link>
+          </div>
+          {treasuryBalance && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <div className="card p-4 border-l-4 border-teal">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-teal/10 rounded-xl flex items-center justify-center flex-shrink-0"><ArrowUpRight size={18} className="text-teal" /></div>
+                  <div><div className="text-xs text-gray-400 font-semibold">Total Income</div><div className="text-lg font-montserrat font-bold text-teal">KES {parseFloat(treasuryBalance.total_income || 0).toLocaleString()}</div></div>
+                </div>
+              </div>
+              <div className="card p-4 border-l-4 border-orange">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-orange/10 rounded-xl flex items-center justify-center flex-shrink-0"><ArrowDownRight size={18} className="text-orange" /></div>
+                  <div><div className="text-xs text-gray-400 font-semibold">Total Disbursed</div><div className="text-lg font-montserrat font-bold text-orange">KES {parseFloat(treasuryBalance.total_expenses || 0).toLocaleString()}</div></div>
+                </div>
+              </div>
+              <div className={`card p-4 border-l-4 ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'border-green-500' : 'border-red'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'bg-green-100' : 'bg-red/10'}`}><DollarSign size={18} className={parseFloat(treasuryBalance.balance || 0) >= 0 ? 'text-green-600' : 'text-red'} /></div>
+                  <div><div className="text-xs text-gray-400 font-semibold">Current Balance</div><div className={`text-lg font-montserrat font-bold ${parseFloat(treasuryBalance.balance || 0) >= 0 ? 'text-green-600' : 'text-red'}`}>KES {parseFloat(treasuryBalance.balance || 0).toLocaleString()}</div></div>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { to: '/treasurer/requisitions', icon: FileText, label: 'Requisitions', color: 'bg-orange/10 text-orange', badge: treasuryPending },
+              { to: '/treasurer/income', icon: TrendingUp, label: 'Income Ledger', color: 'bg-teal/10 text-teal' },
+              { to: '/treasurer/budget', icon: BarChart3, label: 'Budget Manager', color: 'bg-navy/10 text-navy' },
+              { to: '/treasurer/reports', icon: FileText, label: 'Financial Reports', color: 'bg-green-100 text-green-600' },
+            ].map((item, i) => (
+              <Link key={i} to={item.to} className="flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-orange/30 hover:bg-orange/5 transition-all text-center relative">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.color}`}><item.icon size={18} /></div>
+                <span className="text-xs font-montserrat font-bold text-navy">{item.label}</span>
+                {item.badge > 0 && <span className="absolute -top-1 -right-1 bg-orange text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{item.badge}</span>}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -107,7 +158,7 @@ function PendingMemberSkeleton({ user }) {
 }
 
 export default function Dashboard() {
-  const { user, isAdmin, isSecretary, isNC, canManageRequisitions } = useAuth()
+  const { user, isAdmin, isSecretary, isNC, canManageRequisitions, isTreasurer } = useAuth()
   const navigate = useNavigate()
   const [cycle, setCycle] = useState(null)
   const [stats, setStats] = useState({ total_members: 0, active_members: 0, pending_members: 0, ministry_count: 0 })
@@ -115,13 +166,11 @@ export default function Dashboard() {
   const [announcements, setAnnouncements] = useState([])
   const [ministryContent, setMinistryContent] = useState([])
   const [loading, setLoading] = useState(true)
+  const [treasuryBalance, setTreasuryBalance] = useState(null)
+  const [treasuryPending, setTreasuryPending] = useState(0)
+  const [currentYear] = useState(`${new Date().getFullYear()}/${new Date().getFullYear() + 1}`)
 
-  // Role-based redirect — send privileged roles to their dedicated dashboards
-  useEffect(() => {
-    if (!user) return
-    if (user.role === 'cu_treasurer') navigate('/treasurer', { replace: true })
-    else if (user.role === 'nc_chair') navigate('/nc', { replace: true })
-  }, [user])
+  
 
   const photoUrl = user?.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
 
@@ -144,14 +193,7 @@ export default function Dashboard() {
           setMinistryContent(mcRes.data?.content || [])
         } catch {}
       }
-      if (isAdmin && isAdmin()) {
-        try {
-          const adminRes = await api.get('/admin/dashboard')
-          if (adminRes.data?.stats) setStats(adminRes.data.stats)
-          if (adminRes.data?.currentEC) setCurrentEC(adminRes.data.currentEC)
-        } catch {}
-      }
-      setLoading(false)
+      
     }
     if (!isPending) fetchData()
     else setLoading(false)

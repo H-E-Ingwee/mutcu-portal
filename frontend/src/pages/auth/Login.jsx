@@ -31,10 +31,7 @@ export default function Login() {
         navigate('/change-password', { replace: true })
       } else if (!data.user.email_verified) {
         navigate('/verify-email', { replace: true })
-      } else if (!data.user.profile_complete) {
-        navigate('/profile/complete', { replace: true })
-      }
-    } catch (err) {
+      
       const code = err.response?.data?.code
       const msg  = err.response?.data?.error || 'Login failed. Please check your credentials.'
 
