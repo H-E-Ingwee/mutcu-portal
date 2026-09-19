@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
@@ -32,6 +32,8 @@ export default function CalendarPage() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // null | 'new' | event object
+  const [rsvps, setRsvps] = useState({}) // { eventId: 'going'|'not_going'|'maybe'|null }
+  const [rsvpLoading, setRsvpLoading] = useState({})
   const [form, setForm] = useState({
     spiritual_year: '', title: '', event_type: 'prayer',
     event_date: '', end_date: '', description: '', is_recurring: false, is_published: true,
@@ -54,9 +56,28 @@ export default function CalendarPage() {
     const params = new URLSearchParams()
     if (selectedYear) params.set('year', selectedYear)
     if (filterType) params.set('type', filterType)
-    api.get(`${endpoint}?${params}`).then(r => setEvents(r.data.events || []))
-      .catch(() => {}).finally(() => setLoading(false))
+    api.get(`${endpoint}?${params}`).then(r => {
+      const evts = r.data.events || []
+      setEvents(evts)
+      // Load RSVPs for upcoming events
+      const upcoming = evts.filter(e => new Date(e.event_date) >= new Date()).slice(0, 10)
+      upcoming.forEach(e => {
+        api.get(`/calendar/${e.id}/rsvps`).then(rr => {
+          setRsvps(prev => ({ ...prev, [e.id]: rr.data.my_rsvp }))
+        }).catch(() => {})
+      })
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [selectedYear, filterType, admin])
+
+  const handleRsvp = async (eventId, status) => {
+    setRsvpLoading(prev => ({ ...prev, [eventId]: true }))
+    try {
+      await api.post(`/calendar/${eventId}/rsvp`, { status })
+      setRsvps(prev => ({ ...prev, [eventId]: status }))
+      toast.success(status === 'going' ? '✅ You\'re going!' : status === 'maybe' ? '🤔 Maybe!' : '❌ Not going')
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
+    finally { setRsvpLoading(prev => ({ ...prev, [eventId]: false })) }
+  }
 
   const openModal = (event = null) => {
     if (event) {
@@ -227,19 +248,18 @@ export default function CalendarPage() {
                         {event.end_date && event.end_date !== event.event_date && (
                           <div className="text-xs text-gray-400">Until {new Date(event.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
                         )}
-                        {event.description && <div className="text-xs text-gray-500 mt-1 line-clamp-2">{event.description}</div>}
+                        
+                        {admin && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button onClick={() => openModal(event)} className="text-gray-400 hover:text-navy transition-colors p-1">
+                              <Edit2 size={14} />
+                            </button>
+                            <button onClick={() => deleteEvent(event.id)} className="text-gray-400 hover:text-red transition-colors p-1">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {/* Admin actions */}
-                      {admin && (
-                        <div className="flex gap-1 flex-shrink-0">
-                          <button onClick={() => openModal(event)} className="text-gray-400 hover:text-navy transition-colors p-1">
-                            <Edit2 size={14} />
-                          </button>
-                          <button onClick={() => deleteEvent(event.id)} className="text-gray-400 hover:text-red transition-colors p-1">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )
                 })}

@@ -49,6 +49,8 @@ import AdminPositions from './pages/admin/AdminPositions'
 import AdminBulkEmail from './pages/admin/AdminBulkEmail'
 import FaithDeclaration from './pages/profile/FaithDeclaration'
 import MinistryUpdates from './pages/secretary/MinistryUpdates'
+import Attendance from './pages/Attendance'
+import PWAInstallPrompt from './components/PWAInstallPrompt'
 import AdminMessages from './pages/admin/AdminMessages'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminDisciplinary from './pages/admin/AdminDisciplinary'
@@ -168,6 +170,7 @@ function AppRoutes() {
         <Route path="admin/bulk-email" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminBulkEmail /></ProtectedRoute>} />
         <Route path="profile/faith-declaration" element={<ProtectedRoute roles={['full_member','special_member','associate_member','cu_treasurer','cu_secretary','vice_secretary','ec_admin','super_admin','1st_vp','2nd_vp','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator']}><FaithDeclaration /></ProtectedRoute>} />
         <Route path="secretary/ministry-updates" element={<ProtectedRoute roles={[...ALL_SECRETARY_ROLES,'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','1st_vp','2nd_vp']}><MinistryUpdates /></ProtectedRoute>} />
+        <Route path="attendance" element={<Attendance />} />
         <Route path="admin/messages" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminMessages /></ProtectedRoute>} />
         <Route path="admin/settings" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminSettings /></ProtectedRoute>} />
         <Route path="admin/disciplinary" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminDisciplinary /></ProtectedRoute>} />
@@ -184,6 +187,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <AppRoutes />
+        <PWAInstallPrompt />
         <Toaster position="top-right" toastOptions={{ duration: 4000, style: { fontFamily: 'Montserrat, sans-serif', fontSize: '0.8rem', fontWeight: 600 } }} />
       </BrowserRouter>
     </AuthProvider>

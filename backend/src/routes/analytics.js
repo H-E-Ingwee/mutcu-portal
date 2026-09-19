@@ -215,4 +215,38 @@ router.get('/export/disciplinary', authenticate, requireRole('super_admin', 'ec_
   }
 });
 
+// GET /api/analytics/growth — member registration growth by month
+router.get('/growth', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {
+  try {
+    const { data } = await supabase.from('users')
+      .select('created_at').eq('enrollment_status', 'active').order('created_at')
+    // Group by month
+    const monthly = {}
+    ;(data || []).forEach(u => {
+      const month = u.created_at?.substring(0, 7) // YYYY-MM
+      if (month) monthly[month] = (monthly[month] || 0) + 1
+    })
+    // Build cumulative
+    let cumulative = 0
+    const labels = Object.keys(monthly).sort()
+    const counts = labels.map(m => monthly[m])
+    const cumulativeCounts = labels.map(m => { cumulative += monthly[m]; return cumulative })
+    res.json({ labels, monthly: counts, cumulative: cumulativeCounts })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// GET /api/analytics/attendance — attendance stats
+router.get('/attendance', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {
+  try {
+    const { data: sessions } = await supabase.from('attendance_sessions')
+      .select('id,title,session_date,session_type').order('session_date', { ascending: false }).limit(10)
+    const stats = await Promise.all((sessions || []).map(async s => {
+      const { count } = await supabase.from('attendance_records')
+        .select('*', { count: 'exact', head: true }).eq('session_id', s.id)
+      return { ...s, count: count || 0 }
+    }))
+    res.json({ sessions: stats })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 module.exports = router;

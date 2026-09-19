@@ -152,6 +152,7 @@ export default function Layout() {
                   <NavItem to="/member-card" icon={UserCircle} label="Member Card" />
                   <NavItem to="/leadership" icon={History} label="Leadership History" />
                   <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />
+                  <NavItem to="/attendance" icon={Users} label="Attendance" />
                   <NavItem to="/constitution" icon={BookOpen} label="Constitution" />
                   <NavItem to="/contact" icon={Send} label="Contact Admin" />
                 </>

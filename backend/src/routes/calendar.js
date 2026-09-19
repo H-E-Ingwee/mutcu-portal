@@ -102,4 +102,37 @@ router.delete('/:id', authenticate, requireRole(...CAN_MANAGE_CALENDAR), async (
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST /api/calendar/:id/rsvp — member RSVPs to an event
+router.post('/:id/rsvp', authenticate, async (req, res) => {
+  try {
+    const { status } = req.body // 'going' | 'not_going' | 'maybe'
+    if (!['going', 'not_going', 'maybe'].includes(status)) {
+      return res.status(400).json({ error: 'status must be going, not_going, or maybe' })
+    }
+    // Upsert RSVP
+    const { data, error } = await supabase.from('event_rsvps').upsert({
+      event_id: req.params.id,
+      user_id: req.user.id,
+      status,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'event_id,user_id' }).select().single()
+    if (error) throw error
+    res.json({ rsvp: data, message: `RSVP updated: ${status}` })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// GET /api/calendar/:id/rsvps — get RSVPs for an event
+router.get('/:id/rsvps', authenticate, async (req, res) => {
+  try {
+    const { data } = await supabase.from('event_rsvps')
+      .select('*, user:user_id(name,photo_url,mutcu_number)')
+      .eq('event_id', req.params.id)
+      .order('updated_at', { ascending: false })
+    const myRsvp = data?.find(r => r.user_id === req.user?.id)
+    const counts = { going: 0, not_going: 0, maybe: 0 }
+    ;(data || []).forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++ })
+    res.json({ rsvps: data || [], my_rsvp: myRsvp?.status || null, counts })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 module.exports = router;

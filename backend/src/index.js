@@ -66,6 +66,7 @@ app.use('/api/advisory',         require('./routes/advisory'))
 app.use('/api/requisitions',     require('./routes/requisitions'))
 app.use('/api/treasury',         require('./routes/treasury'))
 app.use('/api/ai',               require('./routes/ai'))
+app.use('/api/attendance',       require('./routes/attendance'))
 app.use('/api/ministry-content', require('./routes/ministry-content'))
 
 app.get('/api/health', (req, res) => {

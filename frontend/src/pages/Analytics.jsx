@@ -2,12 +2,13 @@ import { useEffect, useState, useRef } from 'react'
 import api from '../lib/api'
 import {
   Chart as ChartJS, ArcElement, Tooltip, Legend,
-  CategoryScale, LinearScale, BarElement, LineElement, PointElement
+  CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler
 } from 'chart.js'
-import { Doughnut, Bar } from 'react-chartjs-2'
-import { Download, Printer, RefreshCw, Users, TrendingUp, Award, Filter } from 'lucide-react'
+import { Doughnut, Bar, Line } from 'react-chartjs-2'
+import { Download, Printer, RefreshCw, Users, TrendingUp, Award, Filter, FileText } from 'lucide-react'
+import jsPDF from 'jspdf'
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement)
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler)
 
 const COLORS = ['#04003D','#FF9700','#30D5C8','#FF1229','#6B7280','#9CA3AF','#1E40AF','#065F46','#7C3AED']
 
@@ -15,19 +16,28 @@ export default function Analytics() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
-  const [sortMinistry, setSortMinistry] = useState('count') // count | name
+  const [sortMinistry, setSortMinistry] = useState('count')
   const [sortSchool, setSortSchool] = useState('count')
   const [genderFilter, setGenderFilter] = useState('all')
+  const [growthData, setGrowthData] = useState(null)
+  const [attendanceData, setAttendanceData] = useState(null)
   const printRef = useRef(null)
 
   const fetchData = () => {
     setLoading(true)
-    api.get('/analytics').then(r => setData(r.data)).finally(() => setLoading(false))
+    Promise.all([
+      api.get('/analytics'),
+      api.get('/analytics/growth').catch(() => ({ data: null })),
+      api.get('/analytics/attendance').catch(() => ({ data: null })),
+    ]).then(([mainRes, growthRes, attendRes]) => {
+      setData(mainRes.data)
+      if (growthRes.data) setGrowthData(growthRes.data)
+      if (attendRes.data) setAttendanceData(attendRes.data)
+    }).finally(() => setLoading(false))
   }
 
   useEffect(() => { fetchData() }, [])
 
-  // ── Export CSV ──────────────────────────────────────────────────────────────
   const downloadReport = async (endpoint, filename) => {
     setExporting(true)
     try {
@@ -48,6 +58,124 @@ export default function Analytics() {
   }
 
   const exportCSV = () => downloadReport('/analytics/export/members', `MUTCU-Members-${new Date().toISOString().split('T')[0]}.csv`)
+
+  // ── PDF Export ────────────────────────────────────────────────────────────────
+  const exportPDF = (reportLabel) => {
+    if (!data) return
+    const { stats, ministryData, yearData, genderData } = data
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const pageW = doc.internal.pageSize.getWidth()
+
+    // Header
+    doc.setFillColor(4, 0, 61)
+    doc.rect(0, 0, pageW, 28, 'F')
+    doc.setTextColor(255, 151, 0)
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text('MUTCU DMS', 14, 12)
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(11)
+    doc.text(`Analytics Report — ${reportLabel}`, 14, 20)
+    doc.setFontSize(8)
+    doc.setTextColor(200, 200, 200)
+    doc.text(`Generated: ${date}`, pageW - 14, 20, { align: 'right' })
+
+    let y = 38
+
+    // Stats summary
+    doc.setTextColor(4, 0, 61)
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Membership Overview', 14, y); y += 7
+
+    const statItems = [
+      ['Total Members', stats?.total_members || 0],
+      ['Active Members', stats?.active_members || 0],
+      ['Pending Approval', stats?.pending_members || 0],
+      ['Full Members', stats?.full_members || 0],
+    ]
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    statItems.forEach(([label, val], i) => {
+      const x = 14 + (i % 2) * 90
+      if (i % 2 === 0 && i > 0) y += 8
+      doc.setTextColor(100, 100, 100)
+      doc.text(label + ':', x, y)
+      doc.setTextColor(4, 0, 61)
+      doc.setFont('helvetica', 'bold')
+      doc.text(String(val), x + 45, y)
+      doc.setFont('helvetica', 'normal')
+    })
+    y += 14
+
+    // Gender breakdown
+    if (genderData) {
+      doc.setFillColor(245, 247, 250)
+      doc.rect(14, y - 4, pageW - 28, 18, 'F')
+      doc.setTextColor(4, 0, 61)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text('Gender', 18, y + 2)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(80, 80, 80)
+      doc.text(`Male: ${genderData.male || 0}  |  Female: ${genderData.female || 0}`, 18, y + 9)
+      y += 24
+    }
+
+    // Ministry breakdown
+    if (ministryData?.length > 0) {
+      doc.setTextColor(4, 0, 61)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.text('Ministry Distribution', 14, y); y += 7
+      doc.setFontSize(9)
+      ministryData.slice(0, 12).forEach((m, i) => {
+        if (y > 260) { doc.addPage(); y = 20 }
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(60, 60, 60)
+        doc.text(`${i + 1}. ${m.ministry || 'General'}`, 18, y)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(4, 0, 61)
+        doc.text(String(m.count), pageW - 18, y, { align: 'right' })
+        y += 6
+      })
+      y += 6
+    }
+
+    // Year of study
+    if (yearData?.length > 0) {
+      if (y > 240) { doc.addPage(); y = 20 }
+      doc.setTextColor(4, 0, 61)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.text('Year of Study', 14, y); y += 7
+      doc.setFontSize(9)
+      yearData.forEach(yr => {
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(60, 60, 60)
+        doc.text(`Year ${yr.year}`, 18, y)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(4, 0, 61)
+        doc.text(String(yr.count), pageW - 18, y, { align: 'right' })
+        y += 6
+      })
+    }
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFillColor(245, 247, 250)
+      doc.rect(0, 285, pageW, 12, 'F')
+      doc.setFontSize(8)
+      doc.setTextColor(150, 150, 150)
+      doc.text('Inspire Love, Hope & Godliness  ·  portal.mutcu.org', 14, 292)
+      doc.text(`Page ${i} of ${pageCount}`, pageW - 14, 292, { align: 'right' })
+    }
+
+    doc.save(`MUTCU-Analytics-${reportLabel.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`)
+  }
 
   const REPORT_TYPES = [
     { label: 'Full Members Report', endpoint: '/analytics/export/members', file: 'MUTCU-Members', icon: 'fa-users', desc: 'All member details — name, email, ministry, year, status' },
@@ -341,31 +469,7 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* ── Report Downloads ── */}
-      <div className="card mb-6">
-        <div className="card-header">
-          <h2 className="font-montserrat font-bold text-navy text-sm">Download Reports</h2>
-          <span className="text-gray-400 text-xs">Download specific reports as CSV files</span>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {REPORT_TYPES.map((r, i) => (
-              <button key={i} disabled={exporting}
-                onClick={() => downloadReport(r.endpoint, `${r.file}-${new Date().toISOString().split('T')[0]}.csv`)}
-                className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-orange/30 hover:bg-orange/5 transition-all text-left group disabled:opacity-50">
-                <div className="w-9 h-9 rounded-xl bg-navy flex items-center justify-center flex-shrink-0 group-hover:bg-orange transition-colors">
-                  <i className={`fas ${r.icon} text-orange text-sm group-hover:text-white transition-colors`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-montserrat font-bold text-navy text-sm group-hover:text-orange transition-colors">{r.label}</div>
-                  <div className="text-gray-400 text-xs mt-0.5 leading-relaxed">{r.desc}</div>
-                </div>
-                <Download size={14} className="text-gray-300 group-hover:text-orange transition-colors flex-shrink-0 mt-1" />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -436,7 +540,6 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* ── Ministry Table ── */}
       <div className="card mb-6">
         <div className="card-header">
           <h2 className="font-montserrat font-bold text-navy text-sm">Ministry Breakdown</h2>
