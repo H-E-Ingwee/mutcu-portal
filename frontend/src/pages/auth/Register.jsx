@@ -144,6 +144,7 @@ function PhotoCropper({ src, onCrop, onCancel }) {
 
 export default function Register() {
   const [step, setStep] = useState(1)
+  const [membershipType, setMembershipType] = useState('full') // 'full' | 'associate'
   const [form, setForm] = useState({
     name: '', email: '', password: '', confirm_password: '',
     student_id: '', gender: '', year_of_study: '',
@@ -151,6 +152,7 @@ export default function Register() {
     primary_ministry: '', secondary_ministry: '',
     faith_declaration: false,
     phone: '',
+    county: '', year_completed: '',
   })
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
@@ -226,13 +228,16 @@ export default function Register() {
         email: form.email,
         password: form.password,
         phone: form.phone,
-        student_id: form.student_id,
+        student_id: form.student_id || `ASSOC-${Date.now()}`,
         gender: form.gender,
-        year_of_study: form.year_of_study,
-        course_type: form.course_type,
+        year_of_study: membershipType === 'associate' ? null : form.year_of_study,
+        course_type: membershipType === 'associate' ? 'alumni' : form.course_type,
         primary_ministry: form.primary_ministry || null,
         secondary_ministry: form.secondary_ministry || null,
         faith_declaration: form.faith_declaration,
+        membership_type: membershipType,
+        county: form.county || null,
+        year_completed: form.year_completed || null,
       })
       login(data.token, data.user)
 
@@ -289,6 +294,27 @@ export default function Register() {
 
         <div className="card p-6">
           <form onSubmit={handleSubmit}>
+
+            {/* ── Membership Type Selector (shown before step 1) ── */}
+            {step === 1 && (
+              <div className="mb-5">
+                <label className="form-label text-center block mb-3">I am registering as a:</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setMembershipType('full')}
+                    className={`p-4 rounded-xl border-2 text-center transition-all ${membershipType === 'full' ? 'border-orange bg-orange/5' : 'border-gray-100 hover:border-gray-200'}`}>
+                    <div className="text-2xl mb-1">🎓</div>
+                    <div className={`font-montserrat font-bold text-sm ${membershipType === 'full' ? 'text-orange' : 'text-navy'}`}>Current Student</div>
+                    <div className="text-xs text-gray-400 mt-0.5">Full or Special Member</div>
+                  </button>
+                  <button type="button" onClick={() => setMembershipType('associate')}
+                    className={`p-4 rounded-xl border-2 text-center transition-all ${membershipType === 'associate' ? 'border-teal bg-teal/5' : 'border-gray-100 hover:border-gray-200'}`}>
+                    <div className="text-2xl mb-1">🏛️</div>
+                    <div className={`font-montserrat font-bold text-sm ${membershipType === 'associate' ? 'text-teal' : 'text-navy'}`}>Alumni / Graduate</div>
+                    <div className="text-xs text-gray-400 mt-0.5">Associate Member</div>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── Step 1: Personal Info ── */}
             {step === 1 && (
@@ -360,9 +386,50 @@ export default function Register() {
             {/* ── Step 2: Academic Details ── */}
             {step === 2 && (
               <div className="space-y-4">
-                <h2 className="font-montserrat font-bold text-navy text-sm mb-4">Academic Details</h2>
+                <h2 className="font-montserrat font-bold text-navy text-sm mb-4">
+                  {membershipType === 'associate' ? 'Alumni Details' : 'Academic Details'}
+                </h2>
 
-                {/* Course type */}
+                {/* Associate-specific fields */}
+                {membershipType === 'associate' && (
+                  <>
+                    <div>
+                      <label className="form-label">Year Completed at MUT <span className="text-red">*</span></label>
+                      <select className="form-select" value={form.year_completed}
+                        onChange={e => setForm(f => ({ ...f, year_completed: e.target.value }))}>
+                        <option value="">Select year...</option>
+                        {Array.from({ length: 15 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Current County of Settlement <span className="text-red">*</span></label>
+                      <select className="form-select" value={form.county}
+                        onChange={e => setForm(f => ({ ...f, county: e.target.value }))}>
+                        <option value="">Select county...</option>
+                        {['Baringo','Bomet','Bungoma','Busia','Elgeyo-Marakwet','Embu','Garissa','Homa Bay','Isiolo','Kajiado','Kakamega','Kericho','Kiambu','Kilifi','Kirinyaga','Kisii','Kisumu','Kitui','Kwale','Laikipia','Lamu','Machakos','Makueni','Mandera','Marsabit','Meru','Migori','Mombasa','Murang\'a','Nairobi','Nakuru','Nandi','Narok','Nyamira','Nyandarua','Nyeri','Samburu','Siaya','Taita-Taveta','Tana River','Tharaka-Nithi','Trans Nzoia','Turkana','Uasin Gishu','Vihiga','Wajir','West Pokot'].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Gender <span className="text-red">*</span></label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {['male', 'female'].map(g => (
+                          <button key={g} type="button" onClick={() => setForm(f => ({ ...f, gender: g }))}
+                            className={`p-3 rounded-xl border-2 text-sm font-semibold capitalize transition-all ${form.gender === g ? 'border-orange bg-orange/5 text-orange' : 'border-gray-100 text-gray-500'}`}>
+                            {g === 'male' ? '👨 Male' : '👩 Female'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Course type — only for full/special members */}
+                {membershipType !== 'associate' && (
+                <>
                 <div>
                   <label className="form-label">Course Type <span className="text-red">*</span></label>
                   <div className="grid grid-cols-2 gap-3">
@@ -412,14 +479,8 @@ export default function Register() {
                   </div>
                 </div>
 
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setStep(1)} className="btn-outline flex-1 justify-center">
-                    <ChevronLeft size={16} />Back
-                  </button>
-                  <button type="button" onClick={() => validateStep2() && setStep(3)} className="btn-primary flex-1 justify-center">
-                    Next: Ministry <ChevronRight size={16} />
-                  </button>
-                </div>
+                </>
+                )}
               </div>
             )}
 

@@ -49,7 +49,7 @@ const ALL_SECRETARY_ROLES = ['super_admin','ec_admin','cu_secretary','ministry_s
 
 router.get('/', authenticate, requireRole(...ALL_SECRETARY_ROLES), async (req, res) => {
   try {
-    const { search, ministry, year, type, status, page = 1, limit = 30 } = req.query;
+    const { search, ministry, year, type, status, gender, page = 1, limit = 30 } = req.query;
     let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
 
     // Ministry secretaries/coordinators only see members of their ministry
@@ -65,6 +65,7 @@ router.get('/', authenticate, requireRole(...ALL_SECRETARY_ROLES), async (req, r
     if (year) query = query.eq('year_of_study', parseInt(year));
     if (type) query = query.eq('membership_type', type);
     if (status) query = query.eq('enrollment_status', status);
+    if (gender) query = query.eq('gender', gender);
 
     const from = (parseInt(page) - 1) * parseInt(limit);
     query = query.range(from, from + parseInt(limit) - 1);

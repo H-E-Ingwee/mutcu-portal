@@ -29,23 +29,30 @@ router.post('/register', async (req, res) => {
     const {
       name, email, password, student_id, gender, year_of_study,
       primary_ministry, secondary_ministry, faith_declaration, phone,
-      course_type,
+      course_type, membership_type, county, year_completed,
     } = req.body
 
-    // Required fields validation
-    if (!name || !email || !password || !gender || !year_of_study || !faith_declaration || !phone || !student_id) {
-      return res.status(400).json({ error: 'All required fields must be provided including phone number and student registration number' })
+    const isAssociate = membership_type === 'associate'
+
+    if (!name || !email || !password || !gender || !faith_declaration || !phone) {
+      return res.status(400).json({ error: 'Name, email, password, gender, phone and faith declaration are required' })
+    }
+    if (!isAssociate && (!year_of_study || !student_id)) {
+      return res.status(400).json({ error: 'Student registration number and year of study are required for student members' })
+    }
+    if (isAssociate && (!county || !year_completed)) {
+      return res.status(400).json({ error: 'County and year completed are required for associate members' })
     }
 
-    const validCourseType = ['degree', 'diploma'].includes(course_type) ? course_type : 'degree'
+    const validCourseType = isAssociate ? 'alumni' : (['degree', 'diploma'].includes(course_type) ? course_type : 'degree')
 
-    // Year of study validation — max 5 for all (we don't restrict by school prefix at registration)
-    const maxYear = validCourseType === 'diploma' ? 3 : 5
-    if (parseInt(year_of_study) > maxYear) {
-      return res.status(400).json({ error: `Maximum year of study for ${validCourseType} is Year ${maxYear}` })
+    if (!isAssociate) {
+      const maxYear = validCourseType === 'diploma' ? 3 : 5
+      if (parseInt(year_of_study) > maxYear) {
+        return res.status(400).json({ error: `Maximum year of study for ${validCourseType} is Year ${maxYear}` })
+      }
     }
 
-    // Check duplicate email
     const { data: existing } = await supabase.from('users').select('id').eq('email', email).single()
     if (existing) return res.status(400).json({ error: 'Email already registered' })
 
@@ -53,14 +60,17 @@ router.post('/register', async (req, res) => {
     const schoolPrefix = student_id ? student_id.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase() : ''
     const verificationToken = uuidv4()
 
-    // Build insert object — only include new columns if schema_v5 has been run
     const insertData = {
       name, email, password: hashedPassword, phone,
-      student_id, school_prefix: schoolPrefix,
-      gender, year_of_study: parseInt(year_of_study),
-      graduation_year: calcGraduationYear(student_id, validCourseType),
+      student_id: student_id || `ASSOC-${Date.now()}`,
+      school_prefix: schoolPrefix || 'AL',
+      gender,
+      year_of_study: isAssociate ? null : parseInt(year_of_study),
+      graduation_year: isAssociate ? null : calcGraduationYear(student_id, validCourseType),
       primary_ministry: primary_ministry || null,
-      membership_type: 'full', membership_tier: 'general', role: 'full_member',
+      membership_type: isAssociate ? 'associate' : 'full',
+      membership_tier: 'general',
+      role: isAssociate ? 'associate_member' : 'full_member',
       faith_declaration_signed: true, declaration_signed_at: new Date().toISOString(),
       enrollment_status: 'pending', enrollment_year: new Date().getFullYear(),
       membership_year: new Date().getFullYear(),
@@ -71,46 +81,25 @@ router.post('/register', async (req, res) => {
       must_change_password: false, is_temp_password: false,
     }
 
-    // Try to add new columns — gracefully skip if schema_v5 not yet run
     try {
-      // Test if course_type column exists by checking schema
       insertData.course_type = validCourseType
-    } catch {}
-
-    try {
-      if (secondary_ministry) insertData.secondary_ministry = secondary_ministry
+      if (isAssociate) {
+        insertData.county = county || null
+        insertData.year_completed = year_completed ? parseInt(year_completed) : null
+      }
     } catch {}
 
     const { data: user, error } = await supabase.from('users').insert(insertData).select().single()
-
-    if (error) {
-      // If error is about unknown column (schema_v5 not run), retry without new columns
-      if (error.message && (error.message.includes('course_type') || error.message.includes('secondary_ministry') || error.message.includes('pending_changes'))) {
-        delete insertData.course_type
-        delete insertData.secondary_ministry
-        delete insertData.pending_changes
-        const { data: user2, error: error2 } = await supabase.from('users').insert(insertData).select().single()
-        if (error2) throw error2
-        sendVerificationEmail(user2, verificationToken).catch(err => console.error('[VERIFICATION EMAIL ERROR]', err.message))
-        const token = signToken({ id: user2.id, role: user2.role })
-        return res.status(201).json({ token, user: sanitizeUser(user2), message: 'Registration successful! Please check your email to verify your account.' })
-      }
-      throw error
-    }
-
-    // Send verification email (fire and forget)
-    sendVerificationEmail(user, verificationToken).catch(err =>
-      console.error('[VERIFICATION EMAIL ERROR]', err.message)
-    )
+    if (error) throw error
 
     const token = signToken({ id: user.id, role: user.role })
-    res.status(201).json({
-      token,
-      user: sanitizeUser(user),
-      message: 'Registration successful! Please check your email to verify your account.',
-    })
+
+    // Send verification email (fire and forget)
+    sendVerificationEmail(user, verificationToken).catch(e => console.error('[VERIFY EMAIL ERROR]', e.message))
+
+    res.status(201).json({ token, user: sanitizeUser(user), message: 'Registration successful! Please verify your email.' })
   } catch (err) {
-    console.error('Register error:', err.message)
+    console.error('[REGISTER ERROR]', err.message)
     res.status(500).json({ error: err.message })
   }
 })

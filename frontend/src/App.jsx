@@ -51,6 +51,8 @@ import MemberEngagement from './pages/admin/MemberEngagement'
 import AdminAI from './pages/admin/AdminAI'
 import FaithDeclaration from './pages/profile/FaithDeclaration'
 import MinistryUpdates from './pages/secretary/MinistryUpdates'
+import LadiesView from './pages/vp/LadiesView'
+import GentsView from './pages/vp/GentsView'
 import Attendance from './pages/Attendance'
 import PWAInstallPrompt from './components/PWAInstallPrompt'
 import AdminMessages from './pages/admin/AdminMessages'
@@ -86,7 +88,7 @@ const ALL_SECRETARY_ROLES = [
 
 const NC_ROLES = ['nc_member', 'nc_chair', 'nc_secretary', 'ec_admin', 'super_admin']
 const ADMIN_ROLES = ['ec_admin', 'super_admin']
-const ADMIN_AND_SECRETARY = ['ec_admin', 'super_admin', 'cu_secretary', 'cu_treasurer']
+const ADMIN_AND_SECRETARY = ['ec_admin', 'super_admin', 'cu_secretary', 'vice_secretary', 'cu_treasurer']
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth()
@@ -173,11 +175,13 @@ function AppRoutes() {
         <Route path="profile/faith-declaration" element={<ProtectedRoute roles={['full_member','special_member','associate_member','cu_treasurer','cu_secretary','vice_secretary','ec_admin','super_admin','1st_vp','2nd_vp','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator']}><FaithDeclaration /></ProtectedRoute>} />
         <Route path="secretary/ministry-updates" element={<ProtectedRoute roles={[...ALL_SECRETARY_ROLES,'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','1st_vp','2nd_vp']}><MinistryUpdates /></ProtectedRoute>} />
         <Route path="attendance" element={<Attendance />} />
+        <Route path="vp/ladies" element={<ProtectedRoute roles={['1st_vp','ec_admin','super_admin']}><LadiesView /></ProtectedRoute>} />
+        <Route path="vp/gents" element={<ProtectedRoute roles={['2nd_vp','ec_admin','super_admin']}><GentsView /></ProtectedRoute>} />
         <Route path="admin/engagement" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><MemberEngagement /></ProtectedRoute>} />
         <Route path="admin/ai" element={<ProtectedRoute roles={['super_admin','ec_admin','cu_secretary']}><AdminAI /></ProtectedRoute>} />
         <Route path="admin/messages" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminMessages /></ProtectedRoute>} />
         <Route path="admin/settings" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminSettings /></ProtectedRoute>} />
-        <Route path="admin/disciplinary" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminDisciplinary /></ProtectedRoute>} />
+        <Route path="admin/disciplinary" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, "1st_vp", "2nd_vp"]}><AdminDisciplinary /></ProtectedRoute>} />
         <Route path="analytics" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><Analytics /></ProtectedRoute>} />
       </Route>
 

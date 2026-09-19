@@ -166,7 +166,10 @@ export default function Layout() {
                   <NavItem to="/nc/objections" icon={MessageSquare} label="Objections" />
                   <NavItem to="/nc/suggestions" icon={Mic2} label="Suggestions" />
                   {user?.role === 'nc_chair' && (
-                    <NavItem to="/admin/cycles" icon={BookOpen} label="Nomination Cycles" />
+                    <>
+                      <NavItem to="/admin/cycles" icon={BookOpen} label="Nomination Cycles" />
+                      <NavItem to="/admin/nc-data" icon={Shield} label="NC Data Manager" />
+                    </>
                   )}
                 </>
               )}
@@ -181,8 +184,30 @@ export default function Layout() {
                 </>
               )}
 
+              {/* 1st VP — Ladies & Hospitality */}
+              {user?.role === '1st_vp' && (
+                <>
+                  <SectionLabel label="Ladies Ministry" />
+                  <NavItem to="/vp/ladies" icon={Users} label="Ladies & Hospitality" />
+                  <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
+                  <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                </>
+              )}
+
+              {/* 2nd VP — Gents & Associates */}
+              {user?.role === '2nd_vp' && (
+                <>
+                  <SectionLabel label="Gents & Associates" />
+                  <NavItem to="/vp/gents" icon={Users} label="Gents & Associates" />
+                  <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
+                  <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                </>
+              )}
+
               {/* EC Coordinators */}
-              {isECCoordinator && isECCoordinator() && !isTreasurer && (
+              {isECCoordinator && isECCoordinator() && !isTreasurer && !['1st_vp','2nd_vp'].includes(user?.role) && (
                 <>
                   <SectionLabel label={myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'} />
                   <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
@@ -231,7 +256,6 @@ export default function Layout() {
                   <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
                   <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
                   <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
-                  <NavItem to="/admin/nc-data" icon={Shield} label="NC Data Manager" />
                   <NavItem to="/admin/bulk-email" icon={Megaphone} label="Bulk Email" />
                   {/* <NavItem to="/admin/engagement" icon={BarChart3} label="Member Engagement" /> */}
                   {/* <NavItem to="/admin/ai" icon={Sparkles} label="AI Assistant" /> */}
