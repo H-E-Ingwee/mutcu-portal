@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
   MessageSquare, ClipboardList, Megaphone, History, Send, X,
-  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp, Heart
+  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp, Heart, Sparkles
 } from 'lucide-react'
 
 function PendingLock() {
@@ -233,6 +233,8 @@ export default function Layout() {
                   <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
                   <NavItem to="/admin/nc-data" icon={Shield} label="NC Data Manager" />
                   <NavItem to="/admin/bulk-email" icon={Megaphone} label="Bulk Email" />
+                  {/* <NavItem to="/admin/engagement" icon={BarChart3} label="Member Engagement" /> */}
+                  {/* <NavItem to="/admin/ai" icon={Sparkles} label="AI Assistant" /> */}
                   <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
                 </>
               )}

@@ -215,6 +215,83 @@ router.get('/export/disciplinary', authenticate, requireRole('super_admin', 'ec_
   }
 });
 
+// GET /api/analytics/engagement — compute engagement scores for all members
+router.get('/engagement', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {
+  try {
+    const now = new Date()
+    const thisYear = `${now.getFullYear()}/${now.getFullYear() + 1}`
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const thisYearStart = `${now.getFullYear()}-09-01`
+
+    // Fetch all active members
+    const { data: members } = await supabase.from('users')
+      .select('id,name,photo_url,mutcu_number,primary_ministry,year_of_study,updated_at,profile_complete,faith_declaration_renewed_at,enrollment_status,created_at')
+      .eq('enrollment_status', 'active').eq('is_active', true).order('name')
+
+    
+    let rsvpRaw = []
+    try {
+      const rsvpRes = await supabase.from('event_rsvps').select('user_id')
+      rsvpRaw = rsvpRes.data || []
+    } catch { rsvpRaw = [] }
+    const rsvpCounts = {}
+    ;(rsvpRaw || []).forEach(r => { rsvpCounts[r.user_id] = (rsvpCounts[r.user_id] || 0) + 1 })
+
+    // Compute scores
+    const scored = members.map(m => {
+      let score = 0
+      const breakdown = {}
+
+      // Profile complete (+10)
+      if (m.profile_complete) { score += 10; breakdown.profile = 10 }
+
+      // Faith declaration renewed this year (+15)
+      if (m.faith_declaration_renewed_at && m.faith_declaration_renewed_at >= thisYearStart) {
+        score += 15; breakdown.faith_declaration = 15
+      }
+
+      // Attendance this year (up to 30 pts — 5 per session, max 6)
+      const attendCount = attendanceCounts[m.id] || 0
+      const attendPts = Math.min(attendCount * 5, 30)
+      if (attendPts > 0) { score += attendPts; breakdown.attendance = attendPts }
+
+      // Nominations submitted (+20 if any)
+      if (nominationCounts[m.id]) { score += 20; breakdown.nominations = 20 }
+
+      // RSVPs (+5 per RSVP, max 10)
+      const rsvpPts = Math.min((rsvpCounts[m.id] || 0) * 5, 10)
+      if (rsvpPts > 0) { score += rsvpPts; breakdown.rsvps = rsvpPts }
+
+      // Recent activity — updated_at within 30 days (+10)
+      if (m.updated_at && m.updated_at >= thirtyDaysAgo) { score += 10; breakdown.recent_activity = 10 }
+
+      // Cap at 100
+      score = Math.min(score, 100)
+
+      const tier = score >= 80 ? 'highly_engaged' : score >= 60 ? 'active' : score >= 40 ? 'moderate' : score >= 20 ? 'low' : 'inactive'
+
+      return {
+        id: m.id, name: m.name, photo_url: m.photo_url, mutcu_number: m.mutcu_number,
+        primary_ministry: m.primary_ministry, year_of_study: m.year_of_study,
+        score, tier, breakdown,
+        attendance_count: attendCount,
+        nomination_count: nominationCounts[m.id] || 0,
+        rsvp_count: rsvpCounts[m.id] || 0,
+        profile_complete: m.profile_complete,
+        faith_renewed: !!(m.faith_declaration_renewed_at && m.faith_declaration_renewed_at >= thisYearStart),
+        last_activity: m.updated_at,
+      }
+    }).sort((a, b) => b.score - a.score)
+
+    // Summary stats
+    const tierCounts = { highly_engaged: 0, active: 0, moderate: 0, low: 0, inactive: 0 }
+    scored.forEach(m => tierCounts[m.tier]++)
+    const avgScore = scored.length > 0 ? Math.round(scored.reduce((s, m) => s + m.score, 0) / scored.length) : 0
+
+    res.json({ members: scored, total: scored.length, tier_counts: tierCounts, avg_score: avgScore })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 // GET /api/analytics/growth — member registration growth by month
 router.get('/growth', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {
   try {

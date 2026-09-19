@@ -1,13 +1,21 @@
 /**
  * MUTCU DMS — AI Library (Groq)
  * Powers all AI features in the DMS portal
- * Model: llama-3.3-70b-versatile (free tier: 14,400 req/day)
+ * Model: llama-3.1-70b-versatile (primary) with fallbacks (free tier: 14,400 req/day)
  */
 require('dotenv').config()
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_MODEL = 'llama-3.3-70b-versatile'
+// Active Groq models (updated Sep 2026 — decommissioned models removed)
+// Reference: https://console.groq.com/docs/models
+const GROQ_MODELS = [
+  'llama-3.1-70b-versatile',   // Most capable, free tier
+  'llama-3.1-8b-instant',      // Fast, free tier
+  'gemma2-9b-it',              // Google Gemma, free tier
+  'mixtral-8x7b-32768',        // Mistral, free tier
+]
+const GROQ_MODEL = GROQ_MODELS[0] // primary
 
 // ─── MUTCU Context ────────────────────────────────────────────
 const MUTCU_CONTEXT = `You are an AI assistant for MUTCU (Murang'a University of Technology Christian Union) — a Christ-centred student fellowship in Kenya.
@@ -17,34 +25,56 @@ Currency: Kenyan Shillings (KES).
 Ministries: Prayer, Music, Missions & Evangelism, Bible Study & Training, Discipleship, Creative Arts (CREAM), Technical & Media, Hospitality, Welfare Committee, Resource Mobilization Committee (RMC).
 Be concise, professional, and Christ-centred in all responses.`
 
-// ─── Core Groq caller ─────────────────────────────────────────
+// ─── Core Groq caller — tries models in order ─────────────────
 async function callGroq(messages, maxTokens = 600, temperature = 0.5) {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured on server')
 
-  const response = await fetch(GROQ_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${GROQ_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-      stream: false,
-    }),
-  })
+  let lastError = null
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.error?.message || `Groq API error: ${response.status}`)
+  for (const model of GROQ_MODELS) {
+    try {
+      const response = await fetch(GROQ_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: maxTokens,
+          temperature,
+          stream: false,
+        }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        const errMsg = err.error?.message || `Groq API error: ${response.status}`
+        // If model not found or no access, try next model
+        if (errMsg.includes('does not exist') || errMsg.includes('no access') || response.status === 404) {
+          console.warn(`[GROQ] Model ${model} unavailable, trying next...`)
+          lastError = new Error(errMsg)
+          continue
+        }
+        throw new Error(errMsg)
+      }
+
+      const result = await response.json()
+      const text = result.choices?.[0]?.message?.content
+      if (!text) throw new Error('Empty response from Groq')
+      if (model !== GROQ_MODELS[0]) console.log(`[GROQ] Used fallback model: ${model}`)
+      return text.trim()
+    } catch (err) {
+      if (err.message?.includes('does not exist') || err.message?.includes('no access')) {
+        lastError = err
+        continue
+      }
+      throw err
+    }
   }
 
-  const result = await response.json()
-  const text = result.choices?.[0]?.message?.content
-  if (!text) throw new Error('Empty response from Groq')
-  return text.trim()
+  throw lastError || new Error('All Groq models unavailable')
 }
 
 // ─── Helper: parse JSON from AI response ─────────────────────

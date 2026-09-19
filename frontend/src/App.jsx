@@ -47,6 +47,8 @@ import AdminRoles from './pages/admin/AdminRoles'
 import AdminAuditLog from './pages/admin/AdminAuditLog'
 import AdminPositions from './pages/admin/AdminPositions'
 import AdminBulkEmail from './pages/admin/AdminBulkEmail'
+import MemberEngagement from './pages/admin/MemberEngagement'
+import AdminAI from './pages/admin/AdminAI'
 import FaithDeclaration from './pages/profile/FaithDeclaration'
 import MinistryUpdates from './pages/secretary/MinistryUpdates'
 import Attendance from './pages/Attendance'
@@ -171,6 +173,8 @@ function AppRoutes() {
         <Route path="profile/faith-declaration" element={<ProtectedRoute roles={['full_member','special_member','associate_member','cu_treasurer','cu_secretary','vice_secretary','ec_admin','super_admin','1st_vp','2nd_vp','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator']}><FaithDeclaration /></ProtectedRoute>} />
         <Route path="secretary/ministry-updates" element={<ProtectedRoute roles={[...ALL_SECRETARY_ROLES,'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','1st_vp','2nd_vp']}><MinistryUpdates /></ProtectedRoute>} />
         <Route path="attendance" element={<Attendance />} />
+        <Route path="admin/engagement" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><MemberEngagement /></ProtectedRoute>} />
+        <Route path="admin/ai" element={<ProtectedRoute roles={['super_admin','ec_admin','cu_secretary']}><AdminAI /></ProtectedRoute>} />
         <Route path="admin/messages" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminMessages /></ProtectedRoute>} />
         <Route path="admin/settings" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminSettings /></ProtectedRoute>} />
         <Route path="admin/disciplinary" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminDisciplinary /></ProtectedRoute>} />

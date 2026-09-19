@@ -9,7 +9,7 @@ const CAN_VIEW = ['cu_treasurer', 'super_admin', 'ec_admin', 'cu_secretary']
 
 // GET /api/ai/status — check if AI is available
 router.get('/status', authenticate, async (req, res) => {
-  res.json({ available: ai.isAvailable(), model: 'llama-3.3-70b-versatile', provider: 'groq' })
+  res.json({ available: ai.isAvailable(), model: 'llama-3.1-70b-versatile', provider: 'groq' })
 })
 
 // ═══════════════════════════════════════════════════════════════
@@ -268,6 +268,274 @@ router.post('/treasury/income-forecast', authenticate, requireRole(...CAN_VIEW),
     console.error('[AI FORECAST ERROR]', err.message)
     res.status(500).json({ error: err.message })
   }
+})
+
+// ═══════════════════════════════════════════════════════════════
+// AI PHASE 6B — NOMINATIONS AI
+// ═══════════════════════════════════════════════════════════════
+
+// POST /api/ai/nominations/draft-announcement — draft cycle announcement
+router.post('/nominations/draft-announcement', authenticate, requireRole('super_admin', 'ec_admin', 'nc_chair'), async (req, res) => {
+  try {
+    if (!ai.isAvailable()) return res.status(503).json({ error: 'AI service not configured' })
+    const { cycle_title, spiritual_year, nomination_open_date, nomination_close_date, agm_date, positions } = req.body
+
+    const prompt = `Draft a clear, exciting nomination cycle announcement for MUTCU (Murang'a University of Technology Christian Union).
+
+Cycle: ${cycle_title}
+Spiritual Year: ${spiritual_year}
+Nominations Open: ${nomination_open_date}
+Nominations Close: ${nomination_close_date}
+AGM Date: ${agm_date || 'TBA'}
+Positions: ${positions || 'All EC positions'}
+
+Create TWO versions:
+1. WhatsApp message (short, emoji-friendly, max 200 words)
+2. Notice board text (formal, max 150 words)
+
+Respond as valid JSON only:
+{
+  "whatsapp": "...",
+  "notice_board": "...",
+  "subject_line": "..."
+}`
+
+    const text = await ai.callGroq([
+      { role: 'system', content: ai.MUTCU_CONTEXT },
+      { role: 'user', content: prompt }
+    ], 600, 0.6)
+
+    const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}')
+    res.json({ announcement: parsed, generated_at: new Date().toISOString() })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/ai/nominations/eligibility-check — AI eligibility pre-check for all candidates
+router.post('/nominations/eligibility-check', authenticate, requireRole('nc_chair', 'nc_secretary', 'ec_admin', 'super_admin'), async (req, res) => {
+  try {
+    if (!ai.isAvailable()) return res.status(503).json({ error: 'AI service not configured' })
+    const { cycle_id } = req.body
+    if (!cycle_id) return res.status(400).json({ error: 'cycle_id required' })
+
+    // Get all candidates with their eligibility data
+    const { data: recommendations } = await supabase.from('recommendations')
+      .select('candidate_id, position_id, position:position_id(title,gender_constraint,max_terms), candidate:candidate_id(name,year_of_study,is_finalist,disciplinary_status,sgc_executive_role,faith_declaration_signed,gender,course_type,membership_type)')
+      .eq('cycle_id', cycle_id)
+
+    if (!recommendations || recommendations.length === 0) {
+      return res.json({ checks: [], message: 'No candidates found for this cycle' })
+    }
+
+    // Group by candidate
+    const candidateMap = {}
+    recommendations.forEach(r => {
+      const id = r.candidate_id
+      if (!candidateMap[id]) {
+        candidateMap[id] = { candidate: r.candidate, positions: [] }
+      }
+      candidateMap[id].positions.push(r.position)
+    })
+
+    // Run eligibility checks
+    const checks = Object.entries(candidateMap).map(([id, { candidate, positions }]) => {
+      const flags = []
+      let status = 'green'
+
+      if (!candidate.faith_declaration_signed) { flags.push('Faith declaration not signed'); status = 'red' }
+      if (candidate.year_of_study <= 1) { flags.push('First year — not eligible'); status = 'red' }
+      if (candidate.is_finalist) { flags.push('Finalist — cannot be nominated'); status = 'red' }
+      if (candidate.disciplinary_status !== 'clear') { flags.push(`Disciplinary status: ${candidate.disciplinary_status}`); status = 'red' }
+      if (candidate.sgc_executive_role) { flags.push('Holds SGC executive role'); status = 'yellow' }
+      if (candidate.membership_type !== 'full') { flags.push(`Membership type: ${candidate.membership_type}`); status = 'yellow' }
+
+      // Gender checks per position
+      positions.forEach(pos => {
+        if (pos?.gender_constraint && pos.gender_constraint !== candidate.gender) {
+          flags.push(`${pos.title} requires ${pos.gender_constraint} — candidate is ${candidate.gender}`)
+          status = 'red'
+        }
+      })
+
+      if (flags.length === 0) flags.push('All eligibility checks passed')
+      else if (status === 'green') status = 'yellow'
+
+      return {
+        candidate_id: id,
+        name: candidate.name,
+        year_of_study: candidate.year_of_study,
+        positions: positions.map(p => p?.title).filter(Boolean),
+        status,
+        flags,
+      }
+    })
+
+    // AI summary of overall eligibility landscape
+    const redCount = checks.filter(c => c.status === 'red').length
+    const yellowCount = checks.filter(c => c.status === 'yellow').length
+    let aiSummary = null
+
+    if (redCount > 0 || yellowCount > 0) {
+      try {
+        const summaryPrompt = `Summarize the eligibility check results for MUTCU nomination cycle in 2-3 sentences. ${redCount} candidates have critical issues (ineligible), ${yellowCount} have warnings, ${checks.length - redCount - yellowCount} are fully eligible. Be concise and actionable.`
+        aiSummary = await ai.callGroq([
+          { role: 'system', content: ai.MUTCU_CONTEXT },
+          { role: 'user', content: summaryPrompt }
+        ], 200, 0.4)
+      } catch {}
+    }
+
+    res.json({ checks, summary: aiSummary, total: checks.length, red: redCount, yellow: yellowCount, green: checks.length - redCount - yellowCount })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/ai/nominations/draft-reminder — draft deadline reminder
+router.post('/nominations/draft-reminder', authenticate, requireRole('ec_admin', 'super_admin', 'nc_chair'), async (req, res) => {
+  try {
+    if (!ai.isAvailable()) return res.status(503).json({ error: 'AI service not configured' })
+    const { cycle_title, days_remaining, total_members, nominated_count, close_date } = req.body
+
+    const prompt = `Draft a nomination deadline reminder for MUTCU members.
+
+Cycle: ${cycle_title}
+Days remaining: ${days_remaining}
+Members who have nominated: ${nominated_count} of ${total_members}
+Deadline: ${close_date}
+
+Write a short, urgent but encouraging WhatsApp reminder (max 120 words, use emojis). Remind members to prayerfully nominate before the deadline. Include the portal URL: portal.mutcu.org`
+
+    const text = await ai.callGroq([
+      { role: 'system', content: ai.MUTCU_CONTEXT },
+      { role: 'user', content: prompt }
+    ], 250, 0.7)
+
+    res.json({ reminder: text.trim(), generated_at: new Date().toISOString() })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ═══════════════════════════════════════════════════════════════
+// AI PHASE 6C — ADMIN AI
+// ═══════════════════════════════════════════════════════════════
+
+// POST /api/ai/admin/meeting-minutes — summarize raw meeting notes
+router.post('/admin/meeting-minutes', authenticate, requireRole('super_admin', 'ec_admin', 'cu_secretary'), async (req, res) => {
+  try {
+    if (!ai.isAvailable()) return res.status(503).json({ error: 'AI service not configured' })
+    const { raw_notes, meeting_date, attendees } = req.body
+    if (!raw_notes) return res.status(400).json({ error: 'raw_notes required' })
+
+    const prompt = `You are formatting EC meeting minutes for MUTCU (Murang'a University of Technology Christian Union).
+
+Meeting Date: ${meeting_date || 'Not specified'}
+Attendees: ${attendees || 'Not specified'}
+
+Raw Notes:
+${raw_notes}
+
+Format these into clean, official MUTCU EC meeting minutes with these sections:
+1. Meeting Details (date, venue, attendees, apologies)
+2. Agenda Items Discussed
+3. Decisions Made (numbered)
+4. Action Items (person responsible + deadline)
+5. Next Meeting
+
+Write in formal but clear English. No markdown stars. Use numbered lists for decisions and action items.`
+
+    const text = await ai.callGroq([
+      { role: 'system', content: ai.MUTCU_CONTEXT },
+      { role: 'user', content: prompt }
+    ], 800, 0.4)
+
+    res.json({ minutes: text.trim(), generated_at: new Date().toISOString() })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/ai/admin/engagement-analysis — analyze member engagement data
+router.post('/admin/engagement-analysis', authenticate, requireRole('super_admin', 'ec_admin', 'cu_secretary'), async (req, res) => {
+  try {
+    if (!ai.isAvailable()) return res.status(503).json({ error: 'AI service not configured' })
+    const { tier_counts, avg_score, total, low_engagement } = req.body
+
+    const prompt = `Analyze MUTCU member engagement data and provide actionable insights for the EC.
+
+Total Members: ${total}
+Average Score: ${avg_score}/100
+Highly Engaged: ${tier_counts?.highly_engaged || 0}
+Active: ${tier_counts?.active || 0}
+Moderate: ${tier_counts?.moderate || 0}
+Low Engagement: ${tier_counts?.low || 0}
+Inactive: ${tier_counts?.inactive || 0}
+Members needing follow-up: ${low_engagement}
+
+Provide:
+1. Overall assessment (1-2 sentences)
+2. Key concern areas
+3. 3 specific actionable recommendations for the EC
+4. Which ministry/welfare team should follow up
+
+Write in plain English, no markdown. Keep it under 200 words.`
+
+    const text = await ai.callGroq([
+      { role: 'system', content: ai.MUTCU_CONTEXT },
+      { role: 'user', content: prompt }
+    ], 400, 0.5)
+
+    res.json({ analysis: text.trim(), generated_at: new Date().toISOString() })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/ai/admin/disciplinary-advice — constitutional disciplinary guidance
+router.post('/admin/disciplinary-advice', authenticate, requireRole('super_admin', 'ec_admin'), async (req, res) => {
+  try {
+    if (!ai.isAvailable()) return res.status(503).json({ error: 'AI service not configured' })
+    const { offense_description, severity, member_history } = req.body
+    if (!offense_description) return res.status(400).json({ error: 'offense_description required' })
+
+    const prompt = `You are advising the MUTCU Executive Council on a disciplinary matter, guided by the MUTCU Constitution 2025.
+
+Offense: ${offense_description}
+Severity: ${severity || 'Not specified'}
+Member History: ${member_history || 'No prior cases'}
+
+Based on MUTCU Constitution Article 8.5 (disciplinary provisions), advise:
+1. Appropriate disciplinary process to follow
+2. Required steps (written notice, hearing, quorum, etc.)
+3. Recommended outcome range based on severity
+4. Timeline for the process
+5. Any constitutional requirements to observe
+
+Be specific and reference constitutional articles where relevant. Write in plain English.`
+
+    const text = await ai.callGroq([
+      { role: 'system', content: ai.MUTCU_CONTEXT },
+      { role: 'user', content: prompt }
+    ], 500, 0.4)
+
+    res.json({ advice: text.trim(), generated_at: new Date().toISOString() })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/ai/admin/compose-announcement — draft an announcement
+router.post('/admin/compose-announcement', authenticate, requireRole('super_admin', 'ec_admin', 'cu_secretary'), async (req, res) => {
+  try {
+    if (!ai.isAvailable()) return res.status(503).json({ error: 'AI service not configured' })
+    const { topic, tone, additional_details } = req.body
+    if (!topic) return res.status(400).json({ error: 'topic required' })
+
+    const prompt = `Draft a MUTCU announcement for the member portal.
+
+Topic: ${topic}
+Tone: ${tone || 'Professional and warm'}
+Additional details: ${additional_details || 'None'}
+
+Write a clear, engaging announcement (100-200 words) suitable for the MUTCU DMS announcements section. Include a clear call to action if relevant. Write in plain English, no markdown.`
+
+    const text = await ai.callGroq([
+      { role: 'system', content: ai.MUTCU_CONTEXT },
+      { role: 'user', content: prompt }
+    ], 350, 0.7)
+
+    res.json({ announcement: text.trim(), generated_at: new Date().toISOString() })
+  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 module.exports = router
