@@ -1,18 +1,6 @@
 {
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "mutcu-portal.vercel.app"
-        }
-      ],
-      "destination": "https://portal.mutcu.org/$1",
-      "permanent": true
-    }
-  ],
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://mutcu-portal-api.onrender.com/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
