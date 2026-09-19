@@ -18,18 +18,15 @@ export default function GentsView() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/members?gender=male&limit=300&status=active'),
-      // Fetch associates by both membership_type AND role
-      api.get('/members?membership_type=associate&limit=300'),
-      api.get('/members?role=associate_member&limit=300'),
-    ]).then(([gentsRes, assocByType, assocByRole]) => {
-      setGents(gentsRes.data.members || [])
-      // Merge and deduplicate associates
-      const all = [...(assocByType.data.members || []), ...(assocByRole.data.members || [])]
-      const unique = Array.from(new Map(all.map(m => [m.id, m])).values())
-      setAssociates(unique)
-    }).catch(() => toast.error('Failed to load data'))
-    .finally(() => setLoading(false))
+      api.get('/members?gender=male'),
+      api.get('/members?membership_type=associate'),
+    ])
+      .then(([gentsResponse, associatesResponse]) => {
+        setGents(gentsResponse.data?.members || gentsResponse.data || [])
+        setAssociates(associatesResponse.data?.members || associatesResponse.data || [])
+      })
+      .catch(() => toast.error('Failed to load data'))
+      .finally(() => setLoading(false))
   }, [])
 
   const exportCSV = (data, filename) => {

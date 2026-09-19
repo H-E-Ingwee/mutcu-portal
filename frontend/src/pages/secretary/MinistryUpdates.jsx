@@ -11,18 +11,7 @@ const CONTENT_TYPES = [
 ]
 
 export default function MinistryUpdates() {
-  const { user, getMyMinistry } = useAuth()
-  const [content, setContent] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    content_type: 'announcement', title: '', body: '',
-    meeting_day: '', meeting_time: '', meeting_venue: '',
-  })
-
-  const myMinistry = getMyMinistry ? getMyMinistry() : user?.primary_ministry
+  
 
   const load = () => {
     if (!myMinistry) return setLoading(false)
@@ -82,6 +71,16 @@ export default function MinistryUpdates() {
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 
+  // 2nd VP has no ministry content — redirect them to use gender updates
+  if (user?.role === '2nd_vp') return (
+    <div className="card p-10 text-center text-gray-400">
+      <Megaphone size={36} className="mx-auto mb-3 text-orange" />
+      <h3 className="font-montserrat font-bold text-navy mb-2">Send Gents Updates</h3>
+      <p className="text-sm mb-4">As 2nd Vice Chairperson, use the <strong>Gents & Associates</strong> page to send updates directly to all male members.</p>
+      <a href="/vp/gents" className="btn-primary mx-auto">Go to Gents & Associates →</a>
+    </div>
+  )
+
   if (!myMinistry) return (
     <div className="card p-10 text-center text-gray-400">
       <Megaphone size={36} className="mx-auto mb-3 text-gray-200" />
@@ -96,7 +95,9 @@ export default function MinistryUpdates() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Ministry Updates</h1>
-          <p className="page-subtitle">{myMinistry} — Post announcements and meeting schedules</p>
+          <p className="page-subtitle">
+            {user?.role === '1st_vp' ? 'Hospitality Ministry — Post announcements for Hospitality members' : `${myMinistry} — Post announcements and meeting schedules`}
+          </p>
         </div>
         <button onClick={() => { resetForm(); setShowForm(true) }} className="btn-primary btn-sm">
           <Plus size={14} /> Post Update
