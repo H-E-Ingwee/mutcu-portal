@@ -4,7 +4,7 @@ const supabase = require('../lib/supabase');
 const { authenticate, requireRole } = require('../middleware/auth');
 
 const ADMIN = ['super_admin', 'ec_admin'];
-const SECRETARY = ['super_admin', 'ec_admin', 'cu_secretary'];
+const SECRETARY = ['super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary', '1st_vp', '2nd_vp'];
 
 // GET /api/disciplinary — list all cases (admin/secretary)
 router.get('/', authenticate, requireRole(...SECRETARY), async (req, res) => {
@@ -211,5 +211,53 @@ router.post('/sync-finalists', authenticate, requireRole(...ADMIN), async (req, 
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// GET /api/disciplinary/:id/proceedings
+router.get('/:id/proceedings', authenticate, requireRole(...SECRETARY), async (req, res) => {
+  try {
+    const { data } = await supabase.from('disciplinary_proceedings')
+      .select('*, conductor:conducted_by(name,role)')
+      .eq('case_id', req.params.id)
+      .order('proceeding_date', { ascending: true })
+    res.json({ proceedings: data || [] })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/disciplinary/:id/proceedings
+router.post('/:id/proceedings', authenticate, requireRole(...SECRETARY), async (req, res) => {
+  try {
+    const { proceeding_type, title, description, proceeding_date, is_confidential } = req.body
+    if (!title || !proceeding_type) return res.status(400).json({ error: 'title and proceeding_type required' })
+    const { data, error } = await supabase.from('disciplinary_proceedings').insert({
+      case_id: req.params.id, proceeding_type, title,
+      description: description || null,
+      proceeding_date: proceeding_date || new Date().toISOString().split('T')[0],
+      conducted_by: req.user.id,
+      is_confidential: is_confidential !== false,
+    }).select('*, conductor:conducted_by(name,role)').single()
+    if (error) throw error
+    res.status(201).json({ proceeding: data })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// DELETE /api/disciplinary/:caseId/proceedings/:id
+router.delete('/:caseId/proceedings/:id', authenticate, requireRole(...ADMIN), async (req, res) => {
+  try {
+    await supabase.from('disciplinary_proceedings').delete().eq('id', req.params.id)
+    res.json({ message: 'Proceeding deleted' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// GET /api/disciplinary/:id/report — generate confidential report
+router.get('/:id/report', authenticate, requireRole(...SECRETARY), async (req, res) => {
+  try {
+    const [caseRes, procRes] = await Promise.all([
+      supabase.from('disciplinary_cases').select('*, member:member_id(name,mutcu_number,year_of_study,primary_ministry), reporter:reported_by(name), resolver:resolved_by(name)').eq('id', req.params.id).single(),
+      supabase.from('disciplinary_proceedings').select('*, conductor:conducted_by(name,role)').eq('case_id', req.params.id).order('proceeding_date'),
+    ])
+    if (!caseRes.data) return res.status(404).json({ error: 'Case not found' })
+    res.json({ case: caseRes.data, proceedings: procRes.data || [], generated_by: req.user.name, generated_at: new Date().toISOString() })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
 
 module.exports = router;

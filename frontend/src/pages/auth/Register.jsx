@@ -408,7 +408,7 @@ export default function Register() {
                       <select className="form-select" value={form.county}
                         onChange={e => setForm(f => ({ ...f, county: e.target.value }))}>
                         <option value="">Select county...</option>
-                        {['Baringo','Bomet','Bungoma','Busia','Elgeyo-Marakwet','Embu','Garissa','Homa Bay','Isiolo','Kajiado','Kakamega','Kericho','Kiambu','Kilifi','Kirinyaga','Kisii','Kisumu','Kitui','Kwale','Laikipia','Lamu','Machakos','Makueni','Mandera','Marsabit','Meru','Migori','Mombasa','Murang\'a','Nairobi','Nakuru','Nandi','Narok','Nyamira','Nyandarua','Nyeri','Samburu','Siaya','Taita-Taveta','Tana River','Tharaka-Nithi','Trans Nzoia','Turkana','Uasin Gishu','Vihiga','Wajir','West Pokot'].map(c => (
+                        {['Baringo','Bomet','Bungoma','Busia','Elgeyo-Marakwet','Embu','Garissa','Homa Bay','Isiolo','Kajiado','Kakamega','Kericho','Kiambu','Kilifi','Kirinyaga','Kisii','Kisumu','Kitui','Kwale','Laikipia','Lamu','Machakos','Makueni','Mandera','Marsabit','Meru','Migori','Mombasa',"Murang'a",'Nairobi','Nakuru','Nandi','Narok','Nyamira','Nyandarua','Nyeri','Samburu','Siaya','Taita-Taveta','Tana River','Tharaka-Nithi','Trans Nzoia','Turkana','Uasin Gishu','Vihiga','Wajir','West Pokot'].map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
@@ -427,60 +427,78 @@ export default function Register() {
                   </>
                 )}
 
-                {/* Course type — only for full/special members */}
+                {/* Student-specific fields */}
                 {membershipType !== 'associate' && (
-                <>
-                <div>
-                  <label className="form-label">Course Type <span className="text-red">*</span></label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { value: 'degree', label: 'Degree', desc: 'Bachelor\'s degree (4–5 years)' },
-                      { value: 'diploma', label: 'Diploma', desc: 'Diploma programme (3 years)' },
-                    ].map(ct => (
-                      <div key={ct.value} onClick={() => { set('course_type', ct.value); set('year_of_study', '') }}
-                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${form.course_type === ct.value ? 'border-orange bg-orange/5' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <div className="font-semibold text-navy text-sm">{ct.label}</div>
-                        <div className="text-xs text-gray-400">{ct.desc}</div>
+                  <>
+                    <div>
+                      <label className="form-label">Course Type <span className="text-red">*</span></label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { value: 'degree', label: 'Degree', desc: "Bachelor's degree (4–5 years)" },
+                          { value: 'diploma', label: 'Diploma', desc: 'Diploma programme (3 years)' },
+                        ].map(ct => (
+                          <div key={ct.value} onClick={() => { set('course_type', ct.value); set('year_of_study', '') }}
+                            className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${form.course_type === ct.value ? 'border-orange bg-orange/5' : 'border-gray-200 hover:border-gray-300'}`}>
+                            <div className="font-semibold text-navy text-sm">{ct.label}</div>
+                            <div className="text-xs text-gray-400">{ct.desc}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="form-label">Student Registration No. <span className="text-red">*</span></label>
-                  <input type="text" className="form-input" placeholder="e.g. SC200/0396/2022"
-                    value={form.student_id} onChange={e => set('student_id', e.target.value)} required />
-                  {form.student_id && (
-                    <div className="mt-1.5 flex gap-3 text-xs flex-wrap">
-                      {school && <span className="text-teal font-semibold">📚 {school}</span>}
-                      {gradYear && <span className="text-orange font-semibold">🎓 Expected graduation: {gradYear}</span>}
                     </div>
-                  )}
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="form-label">Gender <span className="text-red">*</span></label>
-                    <select className="form-select" value={form.gender} onChange={e => set('gender', e.target.value)} required>
-                      <option value="">Select</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Year of Study <span className="text-red">*</span></label>
-                    <select className="form-select" value={form.year_of_study} onChange={e => set('year_of_study', e.target.value)} required>
-                      <option value="">Select</option>
-                      {yearOptions.map(y => (
-                        <option key={y} value={y}>Year {y}</option>
-                      ))}
-                    </select>
-                    {/* No limitation notices shown during registration */}
-                  </div>
-                </div>
+                    <div>
+                      <label className="form-label">Student Registration No. <span className="text-red">*</span></label>
+                      <input type="text" className="form-input" placeholder="e.g. SC200/0396/2022"
+                        value={form.student_id} onChange={e => set('student_id', e.target.value)} required />
+                      {form.student_id && (
+                        <div className="mt-1.5 flex gap-3 text-xs flex-wrap">
+                          {school && <span className="text-teal font-semibold">📚 {school}</span>}
+                          {gradYear && <span className="text-orange font-semibold">🎓 Expected graduation: {gradYear}</span>}
+                        </div>
+                      )}
+                    </div>
 
-                </>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="form-label">Gender <span className="text-red">*</span></label>
+                        <select className="form-select" value={form.gender} onChange={e => set('gender', e.target.value)} required>
+                          <option value="">Select</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label">Year of Study <span className="text-red">*</span></label>
+                        <select className="form-select" value={form.year_of_study} onChange={e => set('year_of_study', e.target.value)} required>
+                          <option value="">Select</option>
+                          {yearOptions.map(y => (
+                            <option key={y} value={y}>Year {y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </>
                 )}
+
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setStep(1)} className="btn-outline flex-1 justify-center">
+                    <ChevronLeft size={16} />Back
+                  </button>
+                  <button type="button"
+                    onClick={() => {
+                      if (membershipType === 'associate') {
+                        if (!form.year_completed) { toast.error('Please select year completed'); return }
+                        if (!form.county) { toast.error('Please select your county'); return }
+                        if (!form.gender) { toast.error('Please select your gender'); return }
+                        setStep(3)
+                      } else {
+                        validateStep2() && setStep(3)
+                      }
+                    }}
+                    className="btn-primary flex-1 justify-center">
+                    Next: Ministry <ChevronRight size={16} />
+                  </button>
+                </div>
               </div>
             )}
 

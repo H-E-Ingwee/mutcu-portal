@@ -8,15 +8,25 @@ const CAN_POST = ['super_admin', 'ec_admin', 'cu_secretary', 'cu_treasurer', 'vi
   'discipleship_coordinator', 'tech_media_coordinator', 'creative_arts_coordinator',
   'interim_chair', 'interim_secretary', 'interim_treasurer']
 
-// GET /api/announcements
+// GET /api/announcements — filter by member's gender for targeted announcements
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { data } = await supabase.from('announcements')
+    const memberGender = req.user?.gender
+    let query = supabase.from('announcements')
       .select('*, author:author_id(name,photo_url,role)')
       .eq('is_published', true)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(30)
+
+    // Show: announcements with no gender target OR matching member's gender
+    if (memberGender) {
+      query = query.or(`target_gender.is.null,target_gender.eq.${memberGender}`)
+    } else {
+      query = query.is('target_gender', null)
+    }
+
+    const { data } = await query
     res.json({ announcements: data || [] })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -87,6 +97,33 @@ router.delete('/:id', authenticate, requireRole(...CAN_POST), async (req, res) =
     }
     await supabase.from('announcements').delete().eq('id', req.params.id)
     res.json({ message: 'Announcement deleted' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/announcements/gender-update — VP sends update to all ladies or all gents
+router.post('/gender-update', authenticate, async (req, res) => {
+  try {
+    const { title, body, target_gender } = req.body
+    if (!title || !body || !target_gender) return res.status(400).json({ error: 'title, body and target_gender required' })
+
+    // Only 1st VP (ladies) and 2nd VP (gents) can send gender-targeted updates
+    if (target_gender === 'female' && req.user.role !== '1st_vp' && !['ec_admin','super_admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only 1st VP can send updates to ladies' })
+    }
+    if (target_gender === 'male' && req.user.role !== '2nd_vp' && !['ec_admin','super_admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only 2nd VP can send updates to gents' })
+    }
+
+    // Save as a targeted announcement
+    const { data, error } = await supabase.from('announcements').insert({
+      title, body,
+      author_id: req.user.id,
+      is_published: true,
+      target_gender,
+    }).select().single()
+    if (error) throw error
+
+    res.status(201).json({ announcement: data, message: `Update sent to all ${target_gender === 'female' ? 'ladies' : 'gents'}` })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

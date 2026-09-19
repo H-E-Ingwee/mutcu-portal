@@ -222,6 +222,9 @@ export default function Layout() {
                   <SectionLabel label="Secretary" />
                   <NavItem to="/secretary/members" icon={Users} label="Member Register" />
                   <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" badge={pendingChangesCount} />
+                  <NavItem to="/admin/messages" icon={MessageSquare} label="Messages" />
+                  <NavItem to="/admin/bulk-email" icon={Megaphone} label="Bulk Email" />
+                  <NavItem to="/calendar" icon={CalendarDays} label="Manage Calendar" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}

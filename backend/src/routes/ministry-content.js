@@ -8,7 +8,9 @@ const MINISTRY_SECRETARY_ROLES = [
   'music_secretary', 'creative_arts_secretary', 'technical_media_secretary',
   'hospitality_secretary', 'prayer_secretary', 'missions_secretary',
   'bible_study_secretary', 'discipleship_secretary', 'welfare_secretary',
-  'cu_secretary', 'ec_admin', 'super_admin',
+  'cu_secretary', 'ec_admin', 'super_admin', '1st_vp', '2nd_vp',
+  'prayer_coordinator', 'music_coordinator', 'missions_coordinator',
+  'bible_study_coordinator', 'discipleship_coordinator', 'tech_media_coordinator', 'creative_arts_coordinator',
 ];
 
 // Map role to ministry name
@@ -17,6 +19,7 @@ const ROLE_TO_MINISTRY = {
   creative_arts_secretary: 'Creative Arts Ministry',
   technical_media_secretary: 'Technical & Media Ministry',
   hospitality_secretary: 'Hospitality Ministry',
+  '1st_vp': 'Hospitality Ministry',  // 1st VP manages Hospitality
   prayer_secretary: 'Prayer Ministry',
   missions_secretary: 'Missions & Evangelism Ministry',
   bible_study_secretary: 'Bible Study & Training Ministry',

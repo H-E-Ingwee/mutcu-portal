@@ -68,7 +68,7 @@ export function AuthProvider({ children }) {
   const isAdmin = () => hasRole('super_admin', 'ec_admin')
 
   // Secretary — broad access (not nominations, not role management)
-  const isSecretary = () => hasRole('super_admin', 'ec_admin', 'cu_secretary')
+  const isSecretary = () => hasRole('super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary')
 
   // CU Treasurer — dedicated financial role (separate from Secretary)
   const isTreasurer = () => hasRole('super_admin', 'ec_admin', 'cu_treasurer')
