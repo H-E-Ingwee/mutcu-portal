@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
   MessageSquare, ClipboardList, Megaphone, History, Send, X,
-  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp
+  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp, Heart
 } from 'lucide-react'
 
 function PendingLock() {
@@ -143,7 +143,7 @@ export default function Layout() {
             </>
           ) : (
             <>
-              {/* ── General member nav ── */}
+              {/* General member nav */}
               {!isTreasurer && (
                 <>
                   <NavItem to="/announcements" icon={Megaphone} label="Announcements" />
@@ -157,7 +157,7 @@ export default function Layout() {
                 </>
               )}
 
-              {/* ── NC Panel ── */}
+              {/* NC Panel */}
               {isNC && isNC() && (
                 <>
                   <SectionLabel label="Nomination College" />
@@ -170,25 +170,27 @@ export default function Layout() {
                 </>
               )}
 
-              {/* ── Ministry Secretary ── */}
+              {/* Ministry Secretary */}
               {isMinistrySecretary && isMinistrySecretary() && (
                 <>
                   <SectionLabel label={myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'} />
                   <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
+                  <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
 
-              {/* ── EC Coordinators ── */}
+              {/* EC Coordinators */}
               {isECCoordinator && isECCoordinator() && !isTreasurer && (
                 <>
                   <SectionLabel label={myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'} />
                   <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
+                  <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
 
-              {/* ── Secretary ── */}
+              {/* Secretary */}
               {isSecretary && isSecretary() && (
                 <>
                   <SectionLabel label="Secretary" />
@@ -198,7 +200,7 @@ export default function Layout() {
                 </>
               )}
 
-              {/* ── CU Treasurer ── */}
+              {/* CU Treasurer */}
               {isTreasurer && (
                 <>
                   <SectionLabel label="Treasury" />
@@ -216,7 +218,7 @@ export default function Layout() {
                 </>
               )}
 
-              {/* ── Admin ── */}
+              {/* Admin */}
               {isAdmin && isAdmin() && (
                 <>
                   <SectionLabel label="Administration" />
@@ -229,12 +231,17 @@ export default function Layout() {
                   <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
                   <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
                   <NavItem to="/admin/nc-data" icon={Shield} label="NC Data Manager" />
+                  <NavItem to="/admin/bulk-email" icon={Megaphone} label="Bulk Email" />
                   <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
                 </>
               )}
 
+              {/* My Profile + Faith Declaration — all non-treasurer members */}
               {!isTreasurer && (
-                <NavItem to="/profile/edit" icon={UserCircle} label="My Profile" />
+                <>
+                  <NavItem to="/profile/edit" icon={UserCircle} label="My Profile" />
+                  <NavItem to="/profile/faith-declaration" icon={Heart} label="Faith Declaration" />
+                </>
               )}
             </>
           )}

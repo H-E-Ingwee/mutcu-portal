@@ -315,7 +315,7 @@ router.get('/export/members', authenticate, requireRole('super_admin','ec_admin'
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// GET /api/admin/settings (legacy — kept for backward compat)
+
 router.get('/settings', authenticate, requireRole(...ADMIN_AND_SECRETARY), async (req, res) => {
   res.json({
     settings: {

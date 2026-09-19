@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { Plus, FileText, Search, X, Check, Printer, Clock, CheckCircle, XCircle, Send, Eye, DollarSign, Sparkles } from 'lucide-react'
 import AIRequisitionReview from '../../components/treasury/AIRequisitionReview'
 import AIAnomalyBadge from '../../components/treasury/AIAnomalyBadge'
+import RequisitionComments from '../../components/RequisitionComments'
 
 const STATUS_CONFIG = {
   pending:            { label: 'Pending',             color: 'badge-gray',   icon: Clock },
@@ -433,22 +434,7 @@ export default function Requisitions() {
                       </div>
                     </div>
                   ))}
-                </div>
 
-                {selected.review_notes && (
-                  <div className="bg-orange/5 border border-orange/20 rounded-lg p-3 text-xs text-gray-700">
-                    <strong className="text-orange">Treasurer's Notes:</strong> {selected.review_notes}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-2">
-                  {/* Endorse — Ministry chairperson / designated approvers */}
-                  {selected.status === 'pending' && canEndorse && (
-                    <button onClick={() => endorseRequisition(selected.id)} disabled={saving} className="btn-primary btn-sm">
-                      <Check size={14} />Endorse as Chairperson
-                    </button>
-                  )}
-                  {/* Review — CU Treasurer only */}
                   {['endorsed', 'pending'].includes(selected.status) && isTreasurer && (
                     <button onClick={() => { setReviewForm({ status: '', total_approved: selected.total_requested, review_notes: '' }); setShowReview(true) }} className="btn-outline btn-sm">
                       <Eye size={14} />Review & Set Amount

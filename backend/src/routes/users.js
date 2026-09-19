@@ -198,7 +198,7 @@ router.delete('/:id', authenticate, requireRole('super_admin', 'ec_admin', 'cu_s
   }
 });
 
-// POST /api/users/request-email-change — step 1: send verification to current email
+ // POST /api/users/request-email-change — step 1: send verification to current email
 router.post('/request-email-change', authenticate, async (req, res) => {
   try {
     const token = crypto.randomBytes(32).toString('hex');
