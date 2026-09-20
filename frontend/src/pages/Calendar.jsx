@@ -22,7 +22,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 export default function CalendarPage() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isSecretary } = useAuth()
   const [events, setEvents] = useState([])
   const [years, setYears] = useState([])
   const [selectedYear, setSelectedYear] = useState('')
@@ -40,7 +40,7 @@ export default function CalendarPage() {
   })
   const [saving, setSaving] = useState(false)
 
-  const admin = isAdmin && isAdmin()
+  const admin = (isAdmin && isAdmin()) || (isSecretary && isSecretary())
 
   useEffect(() => {
     api.get('/calendar/years').then(r => {
@@ -249,16 +249,14 @@ export default function CalendarPage() {
                           <div className="text-xs text-gray-400">Until {new Date(event.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
                         )}
                         
-                        {admin && (
-                          <div className="flex gap-1 flex-shrink-0">
-                            <button onClick={() => openModal(event)} className="text-gray-400 hover:text-navy transition-colors p-1">
-                              <Edit2 size={14} />
-                            </button>
-                            <button onClick={() => deleteEvent(event.id)} className="text-gray-400 hover:text-red transition-colors p-1">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button onClick={() => openModal(event)} className="text-gray-400 hover:text-navy transition-colors p-1">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => deleteEvent(event.id)} className="text-gray-400 hover:text-red transition-colors p-1">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )

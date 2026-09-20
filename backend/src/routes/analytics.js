@@ -3,7 +3,7 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { authenticate, requireRole } = require('../middleware/auth');
 
-const ADMIN_ROLES = ['super_admin', 'ec_admin', 'cu_secretary', 'cu_treasurer'];
+const ADMIN_ROLES = ['super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary', 'cu_treasurer'];
 
 // GET /api/analytics — main dashboard data
 router.get('/', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {

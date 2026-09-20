@@ -20,7 +20,8 @@ export default function GentsView() {
       // Gents: active male full members only
       api.get('/members?gender=male&limit=300&status=active&type=full'),
       // Associates: ONLY those who registered with membership_type=associate
-      api.get('/members?membership_type=associate&limit=300'),
+      // Backend uses 'type' parameter for membership_type filter
+      api.get('/members?type=associate&limit=300'),
     ]).then(([gentsRes, assocRes]) => {
       setGents(gentsRes.data.members || [])
       setAssociates(assocRes.data.members || [])
