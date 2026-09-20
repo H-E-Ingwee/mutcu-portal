@@ -180,6 +180,7 @@ export default function Layout() {
                   <SectionLabel label={myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'} />
                   <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
                   <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
@@ -212,6 +213,7 @@ export default function Layout() {
                   <SectionLabel label={myMinistry ? myMinistry.replace(' Ministry', '') : 'Ministry'} />
                   <NavItem to="/secretary/ministry-members" icon={Users} label="Ministry Members" />
                   <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
@@ -225,6 +227,7 @@ export default function Layout() {
                   <NavItem to="/admin/messages" icon={MessageSquare} label="Messages" />
                   <NavItem to="/admin/bulk-email" icon={Megaphone} label="Bulk Email" />
                   <NavItem to="/calendar" icon={CalendarDays} label="Manage Calendar" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}

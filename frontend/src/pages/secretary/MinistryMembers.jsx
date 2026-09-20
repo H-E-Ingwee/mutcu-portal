@@ -2,18 +2,21 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Search, Users, Send, CheckCircle, X, Plus, Bell } from 'lucide-react'
+import { Search, Users, Send, CheckCircle, X, Plus, Download, Eye } from 'lucide-react'
 
 export default function MinistryMembers() {
   const { user, getMyMinistry } = useAuth()
-  const myMinistry = getMyMinistry() || user?.primary_ministry
+  const myMinistry = getMyMinistry ? getMyMinistry() : user?.primary_ministry
 
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('active')
+  const [selected, setSelected] = useState(null) // for profile modal
   const [showUpdate, setShowUpdate] = useState(false)
-  const [updateForm, setUpdateForm] = useState({ title: '', body: '', meeting_day: '', meeting_time: '', meeting_venue: '', content_type: 'announcement' })
+  const [updateForm, setUpdateForm] = useState({
+    title: '', body: '', meeting_day: '', meeting_time: '', meeting_venue: '', content_type: 'announcement'
+  })
   const [saving, setSaving] = useState(false)
   const [ministryContent, setMinistryContent] = useState([])
 
@@ -26,7 +29,7 @@ export default function MinistryMembers() {
   const fetchMembers = async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ limit: 100 })
+      const params = new URLSearchParams({ limit: 300 })
       if (filterStatus) params.set('status', filterStatus)
       const { data } = await api.get('/members?' + params)
       // Filter to only this ministry's members
@@ -48,39 +51,17 @@ export default function MinistryMembers() {
   const approveMember = async (id) => {
     try {
       await api.post(`/members/${id}/approve`)
-      toast.success('Member approved')
+      toast.success('Member approved!')
       fetchMembers()
     } catch (err) { toast.error(err.response?.data?.error || 'Failed') }
   }
 
   const postUpdate = async () => {
-    if (!updateForm.title) return toast.error('Title is required')
+    if (!updateForm.title.trim()) return toast.error('Title required')
     setSaving(true)
     try {
-      await api.post('/ministry-content', {
-        ministry_name: myMinistry,
-        content_type: updateForm.content_type,
-        title: updateForm.title,
-        body: updateForm.body || null,
-        meeting_day: updateForm.meeting_day || null,
-        meeting_time: updateForm.meeting_time || null,
-        meeting_venue: updateForm.meeting_venue || null,
-      })
-
-      // Also send notifications to ministry members
-      const memberIds = members.filter(m => m.enrollment_status === 'active').map(m => m.id)
-      for (const userId of memberIds) {
-        await api.post('/notifications/send', {
-          user_id: userId,
-          title: `${myMinistry}: ${updateForm.title}`,
-          body: updateForm.body || '',
-          type: 'info',
-          category: 'ministry',
-          link: '/dashboard',
-        }).catch(() => {})
-      }
-
-      toast.success('Ministry update posted and members notified')
+      await api.post('/ministry-content', { ...updateForm, ministry_name: myMinistry })
+      toast.success('Update posted!')
       setShowUpdate(false)
       setUpdateForm({ title: '', body: '', meeting_day: '', meeting_time: '', meeting_venue: '', content_type: 'announcement' })
       fetchContent()
@@ -88,240 +69,246 @@ export default function MinistryMembers() {
     finally { setSaving(false) }
   }
 
-  const deleteContent = async (id) => {
-    if (!window.confirm('Delete this update?')) return
-    try {
-      await api.delete(`/ministry-content/${id}`)
-      toast.success('Deleted')
-      fetchContent()
-    } catch { toast.error('Failed') }
+  const exportCSV = () => {
+    const headers = ['Name', 'Email', 'MUTCU Number', 'Gender', 'Year', 'Primary Ministry', 'Secondary Ministry', 'Phone', 'Student ID', 'Status', 'Membership Type']
+    const rows = filtered.map(m => [
+      m.name, m.email, m.mutcu_number || '', m.gender || '',
+      m.year_of_study || '', m.primary_ministry || '', m.secondary_ministry || '',
+      m.phone || '', m.student_id || '', m.enrollment_status || '', m.membership_type || '',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${myMinistry?.replace(/ /g, '-')}-Members-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
-  const filtered = members.filter(m =>
-    !search || m.name?.toLowerCase().includes(search.toLowerCase()) ||
-    m.email?.toLowerCase().includes(search.toLowerCase()) ||
-    m.mutcu_number?.toLowerCase().includes(search.toLowerCase())
+  const filtered = members.filter(m => {
+    const q = search.toLowerCase()
+    return !q || m.name?.toLowerCase().includes(q) || m.mutcu_number?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)
+  })
+
+  if (!myMinistry) return (
+    <div className="card p-10 text-center text-gray-400">
+      <Users size={36} className="mx-auto mb-3 text-gray-200" />
+      <p className="text-sm">No ministry assigned to your account.</p>
+    </div>
   )
 
-  const pendingCount = members.filter(m => m.enrollment_status === 'pending').length
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{myMinistry || 'My Ministry'}</h1>
-          <p className="page-subtitle">{members.length} members · {pendingCount > 0 ? `${pendingCount} pending approval` : 'All approved'}</p>
+          <h1 className="page-title">Ministry Members</h1>
+          <p className="page-subtitle">{myMinistry} — {filtered.length} members</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowUpdate(true)} className="btn-primary btn-sm">
-            <Send size={14} />Post Ministry Update
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={exportCSV} className="btn-outline btn-sm">
+            <Download size={13} /> Export CSV
+          </button>
+          <button onClick={() => setShowUpdate(true)} className="btn-outline btn-sm">
+            <Send size={13} /> Post Update
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Members list */}
-        <div className="lg:col-span-2">
-          {/* Filters */}
-          <div className="card p-3 mb-4 flex gap-3 flex-wrap">
-            <div className="flex-1 relative min-w-48">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" className="form-input pl-9 text-sm" placeholder="Search members..."
-                value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <select className="form-select text-sm w-36" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="pending">Pending</option>
-            </select>
-          </div>
-
-          <div className="card">
-            <div className="card-header">
-              <h2 className="font-montserrat font-bold text-navy text-sm">
-                <Users size={16} className="inline mr-2" />{myMinistry} Members
-              </h2>
-              <span className="badge badge-navy">{filtered.length}</span>
-            </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Member</th>
-                    <th>MUTCU No.</th>
-                    <th>Year</th>
-                    <th>Ministry Role</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={6} className="text-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange mx-auto" /></td></tr>
-                  ) : filtered.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-8 text-gray-400">No members found in {myMinistry}.</td></tr>
-                  ) : filtered.map(m => {
-                    const photoUrl = m.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name || 'M')}&background=04003D&color=FF9700&size=200&bold=true`
-                    const isPrimary = m.primary_ministry === myMinistry
-                    return (
-                      <tr key={m.id}>
-                        <td>
-                          <div className="flex items-center gap-2.5">
-                            <img src={photoUrl} alt={m.name} className="w-8 h-8 rounded-full object-cover border border-gray-200" />
-                            <div>
-                              <div className="font-bold text-navy text-sm">{m.name}</div>
-                              <div className="text-xs text-gray-400">{m.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td><span className="font-montserrat font-bold text-orange text-xs">{m.mutcu_number || '—'}</span></td>
-                        <td>{m.year_of_study ? <span className="badge badge-navy">Yr {m.year_of_study}</span> : '—'}</td>
-                        <td>
-                          <span className={`badge ${isPrimary ? 'badge-orange' : 'badge-teal'} text-xs`}>
-                            {isPrimary ? 'Primary' : 'Secondary'}
-                          </span>
-                        </td>
-                        <td>
-                          {m.enrollment_status === 'active'
-                            ? <span className="badge badge-green">Active</span>
-                            : m.enrollment_status === 'pending'
-                              ? <span className="badge badge-orange">Pending</span>
-                              : <span className="badge badge-gray">{m.enrollment_status}</span>}
-                        </td>
-                        <td>
-                          {m.enrollment_status === 'pending' && (
-                            <button onClick={() => approveMember(m.id)} className="btn-teal btn-sm text-xs">
-                              <CheckCircle size={12} />Approve
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <div className="relative flex-1 min-w-48">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input className="form-input pl-8 py-1.5 text-sm" placeholder="Search by name, email or MUTCU number..."
+            value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <select className="form-select text-sm py-1.5" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="active">Active Members</option>
+          <option value="pending">Pending Approval</option>
+          <option value="">All</option>
+        </select>
+      </div>
 
-        {/* Ministry content sidebar */}
-        <div className="space-y-4">
-          <div className="card">
-            <div className="card-header">
-              <h2 className="font-montserrat font-bold text-navy text-sm">Ministry Updates</h2>
-              <button onClick={() => setShowUpdate(true)} className="btn-outline btn-sm text-xs"><Plus size={12} />Add</button>
-            </div>
-            <div>
-              {ministryContent.length === 0 ? (
-                <div className="text-center py-6 text-gray-400 text-sm">No updates posted yet.</div>
-              ) : ministryContent.map(c => (
-                <div key={c.id} className="px-4 py-3 border-b border-gray-50 last:border-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="font-semibold text-navy text-sm">{c.title}</div>
-                      {c.content_type === 'meeting_schedule' && c.meeting_day && (
-                        <div className="text-xs text-teal font-semibold mt-0.5">
-                          📅 {c.meeting_day}{c.meeting_time ? ` at ${c.meeting_time}` : ''}{c.meeting_venue ? ` — ${c.meeting_venue}` : ''}
-                        </div>
-                      )}
-                      {c.body && <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">{c.body}</div>}
-                      <span className={`badge text-xs mt-1 ${c.content_type === 'meeting_schedule' ? 'badge-teal' : 'badge-navy'}`}>
-                        {c.content_type === 'meeting_schedule' ? 'Meeting' : 'Announcement'}
-                      </span>
-                    </div>
-                    <button onClick={() => deleteContent(c.id)} className="text-gray-300 hover:text-red transition-colors flex-shrink-0">
-                      <X size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="card p-4">
-            <h3 className="font-montserrat font-bold text-navy text-sm mb-3">Ministry Stats</h3>
-            <div className="space-y-2">
-              {[
-                { label: 'Total Members', value: members.length, color: 'text-navy' },
-                { label: 'Active', value: members.filter(m => m.enrollment_status === 'active').length, color: 'text-teal' },
-                { label: 'Pending Approval', value: pendingCount, color: 'text-orange' },
-                { label: 'Primary Ministry', value: members.filter(m => m.primary_ministry === myMinistry).length, color: 'text-navy' },
-                { label: 'Secondary Ministry', value: members.filter(m => m.secondary_ministry === myMinistry).length, color: 'text-gray-500' },
-              ].map((s, i) => (
-                <div key={i} className="flex justify-between items-center">
-                  <span className="text-xs text-gray-500">{s.label}</span>
-                  <span className={`font-montserrat font-bold text-sm ${s.color}`}>{s.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="card p-4 text-center">
+          <div className="text-2xl font-montserrat font-bold text-navy">{filtered.length}</div>
+          <div className="text-xs text-gray-400 mt-1">Total Members</div>
+        </div>
+        <div className="card p-4 text-center">
+          <div className="text-2xl font-montserrat font-bold text-teal">{filtered.filter(m => m.enrollment_status === 'active').length}</div>
+          <div className="text-xs text-gray-400 mt-1">Active</div>
+        </div>
+        <div className="card p-4 text-center">
+          <div className="text-2xl font-montserrat font-bold text-orange">{filtered.filter(m => m.enrollment_status === 'pending').length}</div>
+          <div className="text-xs text-gray-400 mt-1">Pending</div>
         </div>
       </div>
+
+      {/* Member Grid */}
+      {filtered.length === 0 ? (
+        <div className="card p-10 text-center text-gray-400">
+          <Users size={36} className="mx-auto mb-3 text-gray-200" />
+          <p className="text-sm">No members found for {myMinistry}.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {filtered.map(m => (
+            <div key={m.id} className="card p-4 text-center hover:shadow-md transition-all cursor-pointer relative"
+              onClick={() => setSelected(m)}>
+              {m.enrollment_status === 'pending' && (
+                <div className="absolute top-2 right-2 w-2 h-2 bg-orange rounded-full" title="Pending approval" />
+              )}
+              <img
+                src={m.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=04003D&color=FF9700&size=80&bold=true`}
+                alt="" className="w-14 h-14 rounded-full object-cover border-2 border-orange mx-auto mb-2" />
+              <div className="font-semibold text-navy text-xs truncate">{m.name}</div>
+              <div className="text-xs text-gray-400">{m.mutcu_number || '—'}</div>
+              <div className="text-xs text-orange mt-0.5">Year {m.year_of_study}</div>
+              {m.enrollment_status === 'pending' && (
+                <button onClick={e => { e.stopPropagation(); approveMember(m.id) }}
+                  className="mt-2 text-xs bg-teal/10 text-teal px-2 py-0.5 rounded-full hover:bg-teal/20 transition-all">
+                  <CheckCircle size={10} className="inline mr-0.5" /> Approve
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Member Profile Modal */}
+      {selected && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="card p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-montserrat font-bold text-navy">Member Profile</h3>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            <div className="text-center mb-4">
+              <img
+                src={selected.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selected.name)}&background=04003D&color=FF9700&size=120&bold=true`}
+                alt="" className="w-20 h-20 rounded-full object-cover border-2 border-orange mx-auto mb-2" />
+              <div className="font-montserrat font-bold text-navy">{selected.name}</div>
+              <div className="text-orange text-sm font-semibold">{selected.mutcu_number}</div>
+              <div className="flex gap-1.5 justify-center mt-1 flex-wrap">
+                <span className="badge badge-teal text-xs">{selected.membership_type} member</span>
+                <span className={`badge text-xs ${selected.enrollment_status === 'active' ? 'badge-green' : 'badge-orange'}`}>
+                  {selected.enrollment_status}
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              {[
+                ['Email', selected.email],
+                ['Phone', selected.phone || '—'],
+                ['Student ID', selected.student_id || '—'],
+                ['Year of Study', `Year ${selected.year_of_study}`],
+                ['Course Type', selected.course_type || '—'],
+                ['Primary Ministry', selected.primary_ministry || 'General'],
+                ['Secondary Ministry', selected.secondary_ministry || '—'],
+                ['Gender', selected.gender || '—'],
+                ['Disciplinary Status', selected.disciplinary_status || 'clear'],
+              ].map(([label, val]) => (
+                <div key={label} className="flex justify-between py-1.5 border-b border-gray-50">
+                  <span className="text-gray-400 font-semibold text-xs">{label}</span>
+                  <span className={`text-navy font-semibold text-xs ${label === 'Disciplinary Status' && val !== 'clear' ? 'text-red' : ''}`}>{val}</span>
+                </div>
+              ))}
+            </div>
+            {selected.enrollment_status === 'pending' && (
+              <button onClick={() => { approveMember(selected.id); setSelected(null) }}
+                className="btn-primary w-full justify-center mt-4">
+                <CheckCircle size={14} /> Approve Member
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Post Update Modal */}
       {showUpdate && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="card p-6 max-w-lg w-full">
+          <div className="card p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-montserrat font-bold text-navy">Post Ministry Update</h3>
               <button onClick={() => setShowUpdate(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="form-label">Update Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { value: 'announcement', label: '📢 Announcement' },
-                    { value: 'meeting_schedule', label: '📅 Meeting Schedule' },
-                  ].map(t => (
-                    <div key={t.value} onClick={() => setUpdateForm(f => ({ ...f, content_type: t.value }))}
-                      className={`p-3 rounded-lg border-2 cursor-pointer text-center text-sm font-semibold transition-all ${updateForm.content_type === t.value ? 'border-orange bg-orange/5 text-navy' : 'border-gray-200 text-gray-500'}`}>
-                      {t.label}
-                    </div>
-                  ))}
-                </div>
+                <label className="form-label">Type</label>
+                <select className="form-select" value={updateForm.content_type}
+                  onChange={e => setUpdateForm(f => ({ ...f, content_type: e.target.value }))}>
+                  <option value="announcement">Announcement</option>
+                  <option value="meeting_schedule">Meeting Schedule</option>
+                  <option value="activity">Activity / Event</option>
+                </select>
               </div>
               <div>
-                <label className="form-label">Title *</label>
-                <input type="text" className="form-input" placeholder="e.g. Weekly Rehearsal Update"
+                <label className="form-label">Title <span className="text-orange">*</span></label>
+                <input className="form-input" placeholder="e.g. Practice this Saturday 2pm"
                   value={updateForm.title} onChange={e => setUpdateForm(f => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div>
+                <label className="form-label">Message</label>
+                <textarea className="form-input" rows={3} placeholder="Details..."
+                  value={updateForm.body} onChange={e => setUpdateForm(f => ({ ...f, body: e.target.value }))} />
               </div>
               {updateForm.content_type === 'meeting_schedule' && (
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="form-label">Day</label>
-                    <select className="form-select" value={updateForm.meeting_day} onChange={e => setUpdateForm(f => ({ ...f, meeting_day: e.target.value }))}>
-                      <option value="">Select</option>
+                    <select className="form-select text-sm" value={updateForm.meeting_day}
+                      onChange={e => setUpdateForm(f => ({ ...f, meeting_day: e.target.value }))}>
+                      <option value="">Day</option>
                       {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="form-label">Time</label>
-                    <input type="time" className="form-input" value={updateForm.meeting_time} onChange={e => setUpdateForm(f => ({ ...f, meeting_time: e.target.value }))} />
+                    <input type="time" className="form-input text-sm" value={updateForm.meeting_time}
+                      onChange={e => setUpdateForm(f => ({ ...f, meeting_time: e.target.value }))} />
                   </div>
                   <div>
                     <label className="form-label">Venue</label>
-                    <input type="text" className="form-input" placeholder="e.g. CU Hall" value={updateForm.meeting_venue} onChange={e => setUpdateForm(f => ({ ...f, meeting_venue: e.target.value }))} />
+                    <input className="form-input text-sm" placeholder="Hall..."
+                      value={updateForm.meeting_venue} onChange={e => setUpdateForm(f => ({ ...f, meeting_venue: e.target.value }))} />
                   </div>
                 </div>
               )}
-              <div>
-                <label className="form-label">Message / Details</label>
-                <textarea className="form-input" rows={4} placeholder="Write your update for ministry members..."
-                  value={updateForm.body} onChange={e => setUpdateForm(f => ({ ...f, body: e.target.value }))} />
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
-                <Bell size={12} className="inline mr-1" />
-                This update will be posted to the ministry board AND all {myMinistry} members will receive a notification.
-              </div>
             </div>
-            <div className="flex gap-3 mt-5">
+            <div className="flex gap-3 mt-4">
               <button onClick={postUpdate} disabled={saving} className="btn-primary flex-1 justify-center">
-                <Send size={15} />{saving ? 'Posting...' : 'Post Update & Notify Members'}
+                {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <><Send size={14} /> Post Update</>}
               </button>
-              <button onClick={() => setShowUpdate(false)} className="btn-outline flex-1 justify-center">Cancel</button>
+              <button onClick={() => setShowUpdate(false)} className="btn-outline px-4"><X size={14} /></button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ministry Content */}
+      {ministryContent.length > 0 && (
+        <div className="mt-6">
+          <h2 className="font-montserrat font-bold text-navy text-sm mb-3">Posted Updates ({ministryContent.length})</h2>
+          <div className="space-y-2">
+            {ministryContent.map(item => (
+              <div key={item.id} className="card p-3 flex items-start gap-3">
+                <div className="w-8 h-8 bg-orange/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Send size={14} className="text-orange" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-navy text-sm">{item.title}</div>
+                  {item.body && <div className="text-xs text-gray-500 mt-0.5">{item.body}</div>}
+                  {item.meeting_day && (
+                    <div className="text-xs text-teal mt-0.5">
+                      📅 {item.meeting_day}{item.meeting_time ? ` at ${item.meeting_time}` : ''}{item.meeting_venue ? ` — ${item.meeting_venue}` : ''}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

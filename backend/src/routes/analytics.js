@@ -3,7 +3,20 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { authenticate, requireRole } = require('../middleware/auth');
 
-const ADMIN_ROLES = ['super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary', 'cu_treasurer'];
+// Roles that can view analytics and export member data
+const ADMIN_ROLES = [
+  'super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary', 'cu_treasurer',
+  // EC Ministry Coordinators (Chairpersons)
+  'prayer_coordinator', 'music_coordinator', 'missions_coordinator',
+  'bible_study_coordinator', 'discipleship_coordinator', 'tech_media_coordinator', 'creative_arts_coordinator',
+  '1st_vp', '2nd_vp',
+  // Ministry Committee Secretaries
+  'music_secretary', 'creative_arts_secretary', 'technical_media_secretary', 'hospitality_secretary',
+  'prayer_secretary', 'missions_secretary', 'bible_study_secretary', 'discipleship_secretary', 'welfare_secretary',
+];
+
+// Restricted exports — only senior leadership
+const SENIOR_ROLES = ['super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary'];
 
 // GET /api/analytics — main dashboard data
 router.get('/', authenticate, requireRole(...ADMIN_ROLES), async (req, res) => {

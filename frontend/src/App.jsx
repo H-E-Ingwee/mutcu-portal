@@ -182,7 +182,7 @@ function AppRoutes() {
         <Route path="admin/messages" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminMessages /></ProtectedRoute>} />
         <Route path="admin/settings" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminSettings /></ProtectedRoute>} />
         <Route path="admin/disciplinary" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, "1st_vp", "2nd_vp"]}><AdminDisciplinary /></ProtectedRoute>} />
-        <Route path="analytics" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><Analytics /></ProtectedRoute>} />
+        <Route path="analytics" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, ...ALL_SECRETARY_ROLES]}><Analytics /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />
