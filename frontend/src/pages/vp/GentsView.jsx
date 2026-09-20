@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Users, Download, Search, X, Send, CheckCircle } from 'lucide-react'
+import { Users, Download, Search, X, Send } from 'lucide-react'
 
 export default function GentsView() {
   const [gents, setGents] = useState([])
@@ -10,7 +10,6 @@ export default function GentsView() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('gents')
-  // Gender update
   const [updateTitle, setUpdateTitle] = useState('')
   const [updateBody, setUpdateBody] = useState('')
   const [sending, setSending] = useState(false)
@@ -18,15 +17,15 @@ export default function GentsView() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/members?gender=male'),
-      api.get('/members?membership_type=associate'),
-    ])
-      .then(([gentsResponse, associatesResponse]) => {
-        setGents(gentsResponse.data?.members || gentsResponse.data || [])
-        setAssociates(associatesResponse.data?.members || associatesResponse.data || [])
-      })
-      .catch(() => toast.error('Failed to load data'))
-      .finally(() => setLoading(false))
+      // Gents: active male full members only
+      api.get('/members?gender=male&limit=300&status=active&type=full'),
+      // Associates: ONLY those who registered with membership_type=associate
+      api.get('/members?membership_type=associate&limit=300'),
+    ]).then(([gentsRes, assocRes]) => {
+      setGents(gentsRes.data.members || [])
+      setAssociates(assocRes.data.members || [])
+    }).catch(() => toast.error('Failed to load data'))
+    .finally(() => setLoading(false))
   }, [])
 
   const exportCSV = (data, filename) => {
@@ -83,7 +82,7 @@ export default function GentsView() {
       {/* Send Update Form */}
       {showUpdateForm && (
         <div className="card p-5 mb-5 border-l-4 border-navy">
-          <h3 className="font-montserrat font-bold text-navy mb-3">Send Update to All Gents</h3>
+          <h3 className="font-montserrat font-bold text-navy mb-1">Send Update to All Gents</h3>
           <p className="text-xs text-gray-400 mb-3">This message will appear in the announcements section for all male members only.</p>
           <div className="space-y-3">
             <input className="form-input" placeholder="Title *" value={updateTitle} onChange={e => setUpdateTitle(e.target.value)} />
@@ -145,6 +144,7 @@ export default function GentsView() {
         <div className="card p-10 text-center text-gray-400">
           <Users size={36} className="mx-auto mb-3 text-gray-200" />
           <p className="text-sm">No {tab === 'gents' ? 'male members' : 'associates'} found.</p>
+          {tab === 'associates' && <p className="text-xs mt-1">Associates are members who registered as Alumni/Graduates.</p>}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
