@@ -29,7 +29,7 @@ router.post('/register', async (req, res) => {
     const {
       name, email, password, student_id, gender, year_of_study,
       primary_ministry, secondary_ministry, faith_declaration, phone,
-      course_type, membership_type, county, year_completed,
+      course_type, membership_type, county, year_completed, course_studied, occupation,
     } = req.body
 
     const isAssociate = membership_type === 'associate'
@@ -86,6 +86,8 @@ router.post('/register', async (req, res) => {
       if (isAssociate) {
         insertData.county = county || null
         insertData.year_completed = year_completed ? parseInt(year_completed) : null
+        insertData.course_studied = course_studied || null
+        insertData.occupation = occupation || null
       }
     } catch {}
 

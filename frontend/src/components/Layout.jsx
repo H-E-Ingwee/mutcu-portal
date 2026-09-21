@@ -276,7 +276,7 @@ export default function Layout() {
               {/* My Profile + Faith Declaration — all non-treasurer members */}
               {!isTreasurer && (
                 <>
-                  <NavItem to="/profile/edit" icon={UserCircle} label="My Profile" />
+                  <NavItem to={user?.role === 'associate_member' ? '/profile/associate-edit' : '/profile/edit'} icon={UserCircle} label="My Profile" />
                   <NavItem to="/profile/faith-declaration" icon={Heart} label="Faith Declaration" />
                 </>
               )}

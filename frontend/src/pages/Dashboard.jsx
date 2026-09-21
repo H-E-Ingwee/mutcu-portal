@@ -305,8 +305,8 @@ export default function Dashboard() {
         <TreasurerAlerts alerts={visibleAlerts} onDismiss={dismissAlert} />
       )}
 
-      {/* Active Cycle Banner */}
-      {cycle && (
+      {/* Active Cycle Banner — hidden for associates */}
+      {cycle && user?.role !== 'associate_member' && (
         <div className="card p-4 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -358,8 +358,8 @@ export default function Dashboard() {
             <div className="card-body">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { to: '/nominations', icon: FileText, label: 'Nominate', color: 'bg-orange/10 text-orange', show: !['nc_member', 'nc_chair', 'nc_secretary', 'ec_admin', 'super_admin'].includes(user?.role) },
-                  { to: '/nominations/nominees', icon: Award, label: 'Nominees', color: 'bg-teal/10 text-teal', show: true },
+                  { to: '/nominations', icon: FileText, label: 'Nominate', color: 'bg-orange/10 text-orange', show: !['nc_member', 'nc_chair', 'nc_secretary', 'ec_admin', 'super_admin', 'associate_member'].includes(user?.role) },
+                  { to: '/nominations/nominees', icon: Award, label: 'Nominees', color: 'bg-teal/10 text-teal', show: user?.role !== 'associate_member' },
                   { to: '/member-card', icon: CreditCard, label: 'Member Card', color: 'bg-navy/10 text-navy', show: true },
                   { to: '/announcements', icon: Megaphone, label: 'Announcements', color: 'bg-purple-100 text-purple-600', show: true },
                   { to: '/leadership', icon: History, label: 'Leadership', color: 'bg-blue-100 text-blue-600', show: true },

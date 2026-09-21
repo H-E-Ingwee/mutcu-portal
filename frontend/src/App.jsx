@@ -50,6 +50,7 @@ import AdminBulkEmail from './pages/admin/AdminBulkEmail'
 import MemberEngagement from './pages/admin/MemberEngagement'
 import AdminAI from './pages/admin/AdminAI'
 import FaithDeclaration from './pages/profile/FaithDeclaration'
+import AssociateProfileEdit from './pages/profile/AssociateProfileEdit'
 import MinistryUpdates from './pages/secretary/MinistryUpdates'
 import LadiesView from './pages/vp/LadiesView'
 import GentsView from './pages/vp/GentsView'
@@ -172,6 +173,7 @@ function AppRoutes() {
         <Route path="admin/nc-data" element={<ProtectedRoute roles={['super_admin', 'ec_admin']}><NCDataManager /></ProtectedRoute>} />
         <Route path="admin/positions" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminPositions /></ProtectedRoute>} />
         <Route path="admin/bulk-email" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminBulkEmail /></ProtectedRoute>} />
+        <Route path="profile/associate-edit" element={<ProtectedRoute roles={['associate_member']}><AssociateProfileEdit /></ProtectedRoute>} />
         <Route path="profile/faith-declaration" element={<ProtectedRoute roles={['full_member','special_member','associate_member','cu_treasurer','cu_secretary','vice_secretary','ec_admin','super_admin','1st_vp','2nd_vp','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator']}><FaithDeclaration /></ProtectedRoute>} />
         <Route path="secretary/ministry-updates" element={<ProtectedRoute roles={[...ALL_SECRETARY_ROLES,'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','1st_vp','2nd_vp']}><MinistryUpdates /></ProtectedRoute>} />
         <Route path="attendance" element={<Attendance />} />

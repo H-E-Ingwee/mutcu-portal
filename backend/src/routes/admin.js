@@ -254,7 +254,10 @@ router.put('/roles/:userId', authenticate, requireRole('super_admin', 'ec_admin'
     const { role } = req.body
     const validRoles = ['super_admin','ec_admin','cu_secretary','vice_secretary','cu_treasurer','1st_vp','2nd_vp','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','ministry_secretary','music_secretary','creative_arts_secretary','technical_media_secretary','hospitality_secretary','prayer_secretary','missions_secretary','bible_study_secretary','discipleship_secretary','welfare_secretary','nc_member','nc_chair','nc_secretary','full_member','special_member','associate_member','interim_chair','interim_secretary','interim_treasurer','interim_prayer_coordinator','interim_music_coordinator','interim_missions_coordinator','interim_bible_study_coordinator','interim_tech_media_coordinator','interim_creative_arts_coordinator']
     if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role' })
-   
+    // EC Admin cannot assign super_admin role
+    if (req.user.role === 'ec_admin' && role === 'super_admin') {
+      return res.status(403).json({ error: 'Only Super Admin can assign the Super Admin role' })
+    }
 
     // Get old role for audit log
     const { data: oldUser } = await supabase.from('users').select('id,name,email,role').eq('id', req.params.userId).single()
@@ -315,9 +318,13 @@ router.post('/members/bulk-approve', authenticate, requireRole('super_admin','ec
       const { data: member } = await supabase.from('users').select('mutcu_number').eq('id', id).single()
       let mutcuNumber = member?.mutcu_number
       if (!mutcuNumber) {
-        const { data: lastUser } = await supabase.from('users').select('mutcu_number').like('mutcu_number', `MUTCU-${year}-%`).order('mutcu_number', { ascending: false }).limit(1)
-        let seq = lastUser && lastUser.length > 0 ? parseInt(lastUser[0].mutcu_number.split('-')[2]) + 1 : 2
-        mutcuNumber = `MUTCU-${year}-${String(seq).padStart(4,'0')}`
+        const { data: mData } = await supabase.from('users').select('membership_type').eq('id', id).single()
+        const isAssoc = mData?.membership_type === 'associate'
+        const pfx = isAssoc ? `MUTCU-A-${year}-` : `MUTCU-${year}-`
+        const { data: lastUser } = await supabase.from('users').select('mutcu_number').like('mutcu_number', `${pfx}%`).order('mutcu_number', { ascending: false }).limit(1)
+        const lParts = lastUser && lastUser.length > 0 ? lastUser[0].mutcu_number.split('-') : []
+        let seq = lParts.length > 0 ? parseInt(lParts[lParts.length - 1]) + 1 : 2
+        mutcuNumber = `${pfx}${String(seq).padStart(4,'0')}`
       }
       await supabase.from('users').update({
         enrollment_status: 'active', mutcu_number: mutcuNumber,

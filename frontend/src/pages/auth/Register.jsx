@@ -13,6 +13,19 @@ const MEMBER_MINISTRIES = [
   { name: 'Hospitality Ministry', desc: 'Welcoming, visitor care and fellowship events' },
 ]
 
+// All 9 ministries for associate members
+const ALL_MINISTRIES = [
+  { name: 'Prayer Ministry', desc: 'Intercession, prayer meetings and spiritual warfare' },
+  { name: 'Music Ministry', desc: 'Praise & worship, choir, band and music production' },
+  { name: 'Missions & Evangelism Ministry', desc: 'Campus outreach, Hope Ministry and Integral Mission' },
+  { name: 'Bible Study & Training Ministry', desc: 'Small groups, BEST-P and discipleship classes' },
+  { name: 'Discipleship Ministry', desc: 'Nurturing, accountability groups and years fellowships' },
+  { name: 'Creative Arts Ministry', desc: 'Drama, dance, spoken word and creative expression' },
+  { name: 'Technical & Media Ministry', desc: 'Sound, media, digital content and publicity' },
+  { name: 'Hospitality Ministry', desc: 'Welcoming, visitor care and fellowship events' },
+  { name: 'Welfare Committee', desc: 'Member support, counselling and pastoral care' },
+]
+
 // Fellowship groups (not selectable as ministry — they are year-based)
 // Prayer, Missions, Bible Study, Discipleship, Welfare are fellowships
 
@@ -152,7 +165,7 @@ export default function Register() {
     primary_ministry: '', secondary_ministry: '',
     faith_declaration: false,
     phone: '',
-    county: '', year_completed: '',
+    county: '', year_completed: '', course_studied: '', occupation: '',
   })
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
@@ -200,10 +213,17 @@ export default function Register() {
     }
   }
 
+  // Phone validation — Kenyan format: 07XX, 01XX, or +254
+  const validatePhone = (phone) => {
+    const cleaned = phone.replace(/\s/g, '')
+    return /^(\+254|0)[17]\d{8}$/.test(cleaned) || /^0[0-9]{9}$/.test(cleaned)
+  }
+
   const validateStep1 = () => {
     if (!form.name.trim()) { toast.error('Full name is required'); return false }
     if (!form.email.trim()) { toast.error('Email is required'); return false }
     if (!form.phone.trim()) { toast.error('Phone number is required'); return false }
+    if (!validatePhone(form.phone)) { toast.error('Please enter a valid Kenyan phone number (e.g. 0712345678 or +254712345678)'); return false }
     if (!form.password || form.password.length < 8) { toast.error('Password must be at least 8 characters'); return false }
     if (form.password !== form.confirm_password) { toast.error('Passwords do not match'); return false }
     return true
@@ -238,6 +258,8 @@ export default function Register() {
         membership_type: membershipType,
         county: form.county || null,
         year_completed: form.year_completed || null,
+        course_studied: form.course_studied || null,
+        occupation: form.occupation || null,
       })
       login(data.token, data.user)
 
@@ -393,18 +415,38 @@ export default function Register() {
                 {/* Associate-specific fields */}
                 {membershipType === 'associate' && (
                   <>
-                    <div>
-                      <label className="form-label">Year Completed at MUT <span className="text-red">*</span></label>
-                      <select className="form-select" value={form.year_completed}
-                        onChange={e => setForm(f => ({ ...f, year_completed: e.target.value }))}>
-                        <option value="">Select year...</option>
-                        {Array.from({ length: 15 }, (_, i) => new Date().getFullYear() - i).map(y => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="form-label">Year Completed at MUT <span className="text-red">*</span></label>
+                        <select className="form-select" value={form.year_completed}
+                          onChange={e => setForm(f => ({ ...f, year_completed: e.target.value }))}>
+                          <option value="">Select year...</option>
+                          {Array.from({ length: 15 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label">Gender <span className="text-red">*</span></label>
+                        <select className="form-select" value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}>
+                          <option value="">Select gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                        </select>
+                      </div>
                     </div>
                     <div>
-                      <label className="form-label">Current County of Settlement <span className="text-red">*</span></label>
+                      <label className="form-label">Course / Programme Studied at MUT <span className="text-red">*</span></label>
+                      <input className="form-input" placeholder="e.g. BSc Computer Science, Diploma in Business"
+                        value={form.course_studied} onChange={e => setForm(f => ({ ...f, course_studied: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="form-label">Current Occupation <span className="text-red">*</span></label>
+                      <input className="form-input" placeholder="e.g. Software Engineer, Teacher, Graduate Student"
+                        value={form.occupation} onChange={e => setForm(f => ({ ...f, occupation: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="form-label">Current County of Residence <span className="text-red">*</span></label>
                       <select className="form-select" value={form.county}
                         onChange={e => setForm(f => ({ ...f, county: e.target.value }))}>
                         <option value="">Select county...</option>
@@ -412,17 +454,6 @@ export default function Register() {
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
-                    </div>
-                    <div>
-                      <label className="form-label">Gender <span className="text-red">*</span></label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {['male', 'female'].map(g => (
-                          <button key={g} type="button" onClick={() => setForm(f => ({ ...f, gender: g }))}
-                            className={`p-3 rounded-xl border-2 text-sm font-semibold capitalize transition-all ${form.gender === g ? 'border-orange bg-orange/5 text-orange' : 'border-gray-100 text-gray-500'}`}>
-                            {g === 'male' ? '👨 Male' : '👩 Female'}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   </>
                 )}
@@ -488,8 +519,10 @@ export default function Register() {
                     onClick={() => {
                       if (membershipType === 'associate') {
                         if (!form.year_completed) { toast.error('Please select year completed'); return }
-                        if (!form.county) { toast.error('Please select your county'); return }
                         if (!form.gender) { toast.error('Please select your gender'); return }
+                        if (!form.course_studied?.trim()) { toast.error('Please enter your course/programme studied'); return }
+                        if (!form.occupation?.trim()) { toast.error('Please enter your current occupation'); return }
+                        if (!form.county) { toast.error('Please select your county of residence'); return }
                         setStep(3)
                       } else {
                         validateStep2() && setStep(3)
@@ -510,16 +543,20 @@ export default function Register() {
                 {/* Primary Ministry */}
                 <div>
                   <label className="form-label">
-                    Primary Ministry <span className="text-gray-400 normal-case font-normal">(optional — max 2 total)</span>
+                    {membershipType === 'associate'
+                      ? 'How would you like to support MUTCU? (optional)'
+                      : <span>Primary Ministry <span className="text-gray-400 normal-case font-normal">(optional — max 2 total)</span></span>}
                   </label>
-                  <p className="text-xs text-gray-400 mb-2">Select from the member ministries below. Other CU activities (Prayer, Missions, Bible Study, Discipleship, Welfare) are fellowships open to all members.</p>
+                  {membershipType === 'associate'
+                    ? <p className="text-xs text-gray-400 mb-2">As an alumnus, you can support any of the 9 MUTCU ministries. Select the one that aligns with your gifts and availability.</p>
+                    : <p className="text-xs text-gray-400 mb-2">Select from the member ministries below. Other CU activities (Prayer, Missions, Bible Study, Discipleship, Welfare) are fellowships open to all members.</p>}
                   <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
                     <div onClick={() => { set('primary_ministry', ''); set('secondary_ministry', '') }}
                       className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${!form.primary_ministry ? 'border-navy bg-navy/5' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <div className="font-semibold text-navy text-sm">General Member</div>
-                      <div className="text-xs text-gray-400">Not assigned to a specific ministry</div>
+                      <div className="font-semibold text-navy text-sm">{membershipType === 'associate' ? 'No preference yet' : 'General Member'}</div>
+                      <div className="text-xs text-gray-400">{membershipType === 'associate' ? 'I will decide later' : 'Not assigned to a specific ministry'}</div>
                     </div>
-                    {MEMBER_MINISTRIES.map(m => (
+                    {(membershipType === 'associate' ? ALL_MINISTRIES : MEMBER_MINISTRIES).map(m => (
                       <div key={m.name} onClick={() => set('primary_ministry', m.name)}
                         className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${form.primary_ministry === m.name ? 'border-orange bg-orange/5' : 'border-gray-200 hover:border-gray-300'}`}>
                         <div className="font-semibold text-navy text-sm">{m.name}</div>

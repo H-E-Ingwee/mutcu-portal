@@ -14,7 +14,7 @@ router.get('/profile', authenticate, async (req, res) => {
 // PUT /api/users/profile — self-editable fields
 router.put('/profile', authenticate, async (req, res) => {
   try {
-    const directFields = ['phone', 'primary_ministry', 'secondary_ministry', 'photo_url', 'photo_public_id'];
+    const directFields = ['phone', 'primary_ministry', 'secondary_ministry', 'photo_url', 'photo_public_id', 'county', 'occupation', 'course_studied'];
     const updates = {};
     directFields.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
 

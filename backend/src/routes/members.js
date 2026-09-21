@@ -116,12 +116,17 @@ router.post('/', authenticate, requireRole('super_admin','ec_admin','cu_secretar
     const admissionYear = match ? parseInt(match[1]) : new Date().getFullYear();
     const graduationYear = admissionYear + (schoolPrefix === 'SE' ? 5 : 4);
 
-    // Generate MUTCU number
+    // Generate MUTCU number — associates get MUTCU-A-YEAR-XXXX format
     const year = process.env.MUTCU_FOUNDING_YEAR || new Date().getFullYear();
-    const { data: lastUser } = await supabase.from('users').select('mutcu_number').like('mutcu_number', `MUTCU-${year}-%`).order('mutcu_number', { ascending: false }).limit(1);
+    const isAssociateMember = req.body.membership_type === 'associate';
+    const prefix = isAssociateMember ? `MUTCU-A-${year}-` : `MUTCU-${year}-`;
+    const { data: lastUser } = await supabase.from('users').select('mutcu_number').like('mutcu_number', `${prefix}%`).order('mutcu_number', { ascending: false }).limit(1);
     let seq = 1;
-    if (lastUser && lastUser.length > 0) seq = parseInt(lastUser[0].mutcu_number.split('-')[2]) + 1;
-    const mutcuNumber = `MUTCU-${year}-${String(seq).padStart(4, '0')}`;
+    if (lastUser && lastUser.length > 0) {
+      const parts = lastUser[0].mutcu_number.split('-');
+      seq = parseInt(parts[parts.length - 1]) + 1;
+    }
+    const mutcuNumber = `${prefix}${String(seq).padStart(4, '0')}`;
 
     const verificationToken = uuidv4();
     const { data: user, error } = await supabase.from('users').insert({
