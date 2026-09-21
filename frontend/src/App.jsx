@@ -167,7 +167,7 @@ function AppRoutes() {
         <Route path="admin/cycles" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY,'nc_chair']}><AdminCycles /></ProtectedRoute>} />
         <Route path="admin/cycles/create" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminCycleCreate /></ProtectedRoute>} />
         <Route path="admin/cycles/:id/appoint-nc" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminAppointNC /></ProtectedRoute>} />
-        <Route path="admin/roles" element={<ProtectedRoute roles={['super_admin']}><AdminRoles /></ProtectedRoute>} />
+        <Route path="admin/roles" element={<ProtectedRoute roles={['super_admin','ec_admin']}><AdminRoles /></ProtectedRoute>} />
         <Route path="admin/audit-log" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminAuditLog /></ProtectedRoute>} />
         <Route path="admin/nc-data" element={<ProtectedRoute roles={['super_admin', 'ec_admin']}><NCDataManager /></ProtectedRoute>} />
         <Route path="admin/positions" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminPositions /></ProtectedRoute>} />
@@ -182,7 +182,7 @@ function AppRoutes() {
         <Route path="admin/messages" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminMessages /></ProtectedRoute>} />
         <Route path="admin/settings" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminSettings /></ProtectedRoute>} />
         <Route path="admin/disciplinary" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, "1st_vp", "2nd_vp"]}><AdminDisciplinary /></ProtectedRoute>} />
-        <Route path="analytics" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, ...ALL_SECRETARY_ROLES]}><Analytics /></ProtectedRoute>} />
+        <Route path="analytics" element={<ProtectedRoute roles={[...ADMIN_AND_SECRETARY, ...ALL_SECRETARY_ROLES, 'prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator']}><Analytics /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

@@ -66,8 +66,14 @@ router.get('/history', authenticate, async (req, res) => {
   try {
     const { data } = await supabase.from('appointments')
       .select('*, user:user_id(name,photo_url,primary_ministry), position:position_id(title,display_order)')
+      .order('spiritual_year', { ascending: false })
       .order('commissioned_at', { ascending: false })
-    res.json({ history: data || [] })
+    // Sort within each year by position display_order
+    const sorted = (data || []).sort((a, b) => {
+      if (a.spiritual_year !== b.spiritual_year) return (b.spiritual_year || '').localeCompare(a.spiritual_year || '')
+      return (a.position?.display_order || 99) - (b.position?.display_order || 99)
+    })
+    res.json({ history: sorted })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -77,7 +83,10 @@ router.get('/current', authenticate, async (req, res) => {
     const { data } = await supabase.from('appointments')
       .select('*, user:user_id(name,photo_url,primary_ministry,mutcu_number), position:position_id(title,display_order)')
       .eq('is_current', true)
-    res.json({ ec: data || [] })
+      .order('position(display_order)', { ascending: true })
+    // Sort by position display_order in JS as fallback
+    const sorted = (data || []).sort((a, b) => (a.position?.display_order || 99) - (b.position?.display_order || 99))
+    res.json({ ec: sorted })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

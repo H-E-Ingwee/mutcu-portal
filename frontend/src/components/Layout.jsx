@@ -147,8 +147,12 @@ export default function Layout() {
               {!isTreasurer && (
                 <>
                   <NavItem to="/announcements" icon={Megaphone} label="Announcements" />
-                  <NavItem to="/nominations" icon={FileText} label="Nominations" />
-                  <NavItem to="/nominations/nominees" icon={Award} label="Nominees" />
+                  {user?.role !== 'associate_member' && (
+                    <>
+                      <NavItem to="/nominations" icon={FileText} label="Nominations" />
+                      <NavItem to="/nominations/nominees" icon={Award} label="Nominees" />
+                    </>
+                  )}
                   <NavItem to="/member-card" icon={UserCircle} label="Member Card" />
                   <NavItem to="/leadership" icon={History} label="Leadership History" />
                   <NavItem to="/calendar" icon={CalendarDays} label="Calendar" />

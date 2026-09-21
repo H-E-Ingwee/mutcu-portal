@@ -249,14 +249,16 @@ export default function CalendarPage() {
                           <div className="text-xs text-gray-400">Until {new Date(event.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
                         )}
                         
-                        <div className="flex gap-1 flex-shrink-0">
-                          <button onClick={() => openModal(event)} className="text-gray-400 hover:text-navy transition-colors p-1">
-                            <Edit2 size={14} />
-                          </button>
-                          <button onClick={() => deleteEvent(event.id)} className="text-gray-400 hover:text-red transition-colors p-1">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                        {admin && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button onClick={() => openModal(event)} className="text-gray-400 hover:text-navy transition-colors p-1">
+                              <Edit2 size={14} />
+                            </button>
+                            <button onClick={() => deleteEvent(event.id)} className="text-gray-400 hover:text-red transition-colors p-1">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )

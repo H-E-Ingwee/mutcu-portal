@@ -241,7 +241,7 @@ router.post('/cycles/:id/commission', authenticate, requireRole(...ADMIN), async
 })
 
 // GET /api/admin/roles
-router.get('/roles', authenticate, requireRole('super_admin'), async (req, res) => {
+router.get('/roles', authenticate, requireRole('super_admin', 'ec_admin'), async (req, res) => {
   try {
     const { data } = await supabase.from('users').select('id,name,email,role,enrollment_status').neq('role','full_member').order('name')
     res.json({ users: data||[] })
@@ -249,11 +249,12 @@ router.get('/roles', authenticate, requireRole('super_admin'), async (req, res) 
 })
 
 // PUT /api/admin/roles/:userId
-router.put('/roles/:userId', authenticate, requireRole('super_admin'), async (req, res) => {
+router.put('/roles/:userId', authenticate, requireRole('super_admin', 'ec_admin'), async (req, res) => {
   try {
     const { role } = req.body
     const validRoles = ['super_admin','ec_admin','cu_secretary','vice_secretary','cu_treasurer','1st_vp','2nd_vp','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','ministry_secretary','music_secretary','creative_arts_secretary','technical_media_secretary','hospitality_secretary','prayer_secretary','missions_secretary','bible_study_secretary','discipleship_secretary','welfare_secretary','nc_member','nc_chair','nc_secretary','full_member','special_member','associate_member','interim_chair','interim_secretary','interim_treasurer','interim_prayer_coordinator','interim_music_coordinator','interim_missions_coordinator','interim_bible_study_coordinator','interim_tech_media_coordinator','interim_creative_arts_coordinator']
     if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role' })
+   
 
     // Get old role for audit log
     const { data: oldUser } = await supabase.from('users').select('id,name,email,role').eq('id', req.params.userId).single()
