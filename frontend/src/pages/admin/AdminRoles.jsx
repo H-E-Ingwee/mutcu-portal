@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../../lib/api'
 import toast from 'react-hot-toast'
-import { Shield, Edit2, X, Check, Search, UserMinus, ChevronDown } from 'lucide-react'
+import { Shield, Edit2, X, Check, Search, UserMinus, ChevronDown, Hash, RefreshCw, Plus } from 'lucide-react'
 
 const ROLE_GROUPS = [
   { group: 'Executive Council — Core', roles: [
@@ -56,8 +56,25 @@ const ROLE_GROUPS = [
   ]},
 ]
 
+// Secondary roles are limited to NC and Interim positions (additive roles)
+const SECONDARY_ROLE_OPTIONS = [
+  { value: '', label: 'None (single role)' },
+  { value: 'nc_chair',     label: 'NC Chairperson' },
+  { value: 'nc_secretary', label: 'NC Secretary' },
+  { value: 'nc_member',    label: 'NC Member' },
+  { value: 'interim_chair',                    label: 'Interim Chairperson' },
+  { value: 'interim_secretary',                label: 'Interim Secretary' },
+  { value: 'interim_treasurer',                label: 'Interim Treasurer' },
+  { value: 'interim_prayer_coordinator',       label: 'Interim Prayer Coordinator' },
+  { value: 'interim_music_coordinator',        label: 'Interim Music Coordinator' },
+  { value: 'interim_missions_coordinator',     label: 'Interim Missions Coordinator' },
+  { value: 'interim_bible_study_coordinator',  label: 'Interim Bible Study Coordinator' },
+  { value: 'interim_tech_media_coordinator',   label: 'Interim Tech & Media Coordinator' },
+  { value: 'interim_creative_arts_coordinator',label: 'Interim Creative Arts Coordinator' },
+]
+
 const ALL_ROLES = ROLE_GROUPS.flatMap(g => g.roles)
-const roleLabel = r => ALL_ROLES.find(x => x.value === r)?.label || r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+const roleLabel = r => ALL_ROLES.find(x => x.value === r)?.label || r?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || ''
 
 const ROLE_COLOR = {
   super_admin: 'bg-red/10 text-red border-red/20',
@@ -78,16 +95,21 @@ export default function AdminRoles() {
   const [assigning, setAssigning] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editRole, setEditRole] = useState('')
+  const [editSecondaryRole, setEditSecondaryRole] = useState('')
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [filterGroup, setFilterGroup] = useState('')
   const [memberSearch, setMemberSearch] = useState('')
   const [memberResults, setMemberResults] = useState([])
+  // MUTCU number reassignment
+  const [showReassign, setShowReassign] = useState(false)
+  const [reassignPreview, setReassignPreview] = useState(null)
+  const [reassigning, setReassigning] = useState(false)
 
   useEffect(() => {
     Promise.all([
       api.get('/admin/roles'),
-      api.get('/members?limit=300'),
+      api.get('/members?limit=500'),
     ]).then(([rolesRes, membersRes]) => {
       setUsers(rolesRes.data.users || [])
       setAllMembers(membersRes.data.members || [])
@@ -129,15 +151,19 @@ export default function AdminRoles() {
   const startEdit = (user) => {
     setEditingId(user.id)
     setEditRole(user.role)
+    setEditSecondaryRole(user.secondary_role || '')
   }
 
   const saveEdit = async (userId) => {
     if (!editRole) return
     setSaving(true)
     try {
+      // Save primary role
       const { data } = await api.put(`/admin/roles/${userId}`, { role: editRole })
+      // Save secondary role (always send, even if empty — to clear it)
+      await api.put(`/admin/roles/${userId}/secondary`, { secondary_role: editSecondaryRole || null })
       toast.success(data.message)
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: editRole } : u))
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: editRole, secondary_role: editSecondaryRole || null } : u))
       setEditingId(null)
     } catch (err) { toast.error(err.response?.data?.error || 'Failed to update role') }
     finally { setSaving(false) }
@@ -147,13 +173,35 @@ export default function AdminRoles() {
     if (!window.confirm(`Remove ${user.name}'s special role?\n\nThey will be set back to "Full Member" and lose all elevated access immediately.`)) return
     setSaving(true)
     try {
-      const { data } = await api.put(`/admin/roles/${user.id}`, { role: 'full_member' })
+      await api.put(`/admin/roles/${user.id}`, { role: 'full_member' })
+      await api.put(`/admin/roles/${user.id}/secondary`, { secondary_role: null })
       toast.success(`${user.name} returned to Full Member`)
-      // Remove from the special roles list
       setUsers(prev => prev.filter(u => u.id !== user.id))
       setEditingId(null)
     } catch (err) { toast.error(err.response?.data?.error || 'Failed to remove role') }
     finally { setSaving(false) }
+  }
+
+  // MUTCU number reassignment
+  const previewReassign = async () => {
+    setReassigning(true)
+    try {
+      const { data } = await api.post('/admin/members/reassign-numbers', { dry_run: true })
+      setReassignPreview(data)
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to preview') }
+    finally { setReassigning(false) }
+  }
+
+  const applyReassign = async () => {
+    if (!window.confirm(`Apply MUTCU number reassignment?\n\n${reassignPreview?.total_changes} members will have their numbers updated.\n\nThis cannot be undone.`)) return
+    setReassigning(true)
+    try {
+      const { data } = await api.post('/admin/members/reassign-numbers', { dry_run: false })
+      toast.success(`${data.applied} MUTCU numbers reassigned successfully`)
+      setReassignPreview(null)
+      setShowReassign(false)
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to reassign') }
+    finally { setReassigning(false) }
   }
 
   // Filter the list
@@ -178,7 +226,69 @@ export default function AdminRoles() {
           <h1 className="page-title">Role Management</h1>
           <p className="page-subtitle">Assign, edit, and remove system roles — {users.length} members with special roles</p>
         </div>
+        <button onClick={() => setShowReassign(!showReassign)}
+          className="btn-outline btn-sm flex items-center gap-2">
+          <Hash size={14} /> Reassign MUTCU Numbers
+        </button>
       </div>
+
+      {/* MUTCU Number Reassignment Panel */}
+      {showReassign && (
+        <div className="card p-5 mb-6 border-2 border-orange/30 bg-orange/5">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="font-montserrat font-bold text-navy text-sm flex items-center gap-2">
+                <Hash size={14} className="text-orange" /> MUTCU Number Reassignment
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Resequences MUTCU numbers in registration order after deletions. Run a dry-run preview first.
+              </p>
+            </div>
+            <button onClick={() => { setShowReassign(false); setReassignPreview(null) }} className="text-gray-400 hover:text-gray-600">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="flex gap-3 mb-4">
+            <button onClick={previewReassign} disabled={reassigning} className="btn-outline btn-sm flex items-center gap-2">
+              {reassigning ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-navy" /> : <RefreshCw size={13} />}
+              Preview Changes (Dry Run)
+            </button>
+            {reassignPreview && reassignPreview.total_changes > 0 && (
+              <button onClick={applyReassign} disabled={reassigning} className="btn-primary btn-sm flex items-center gap-2">
+                <Check size={13} /> Apply {reassignPreview.total_changes} Changes
+              </button>
+            )}
+          </div>
+
+          {reassignPreview && (
+            <div>
+              {reassignPreview.total_changes === 0 ? (
+                <div className="text-sm text-teal font-semibold flex items-center gap-2">
+                  <Check size={14} /> All MUTCU numbers are already in correct sequence. No changes needed.
+                </div>
+              ) : (
+                <div>
+                  <div className="text-xs font-semibold text-navy mb-2">{reassignPreview.total_changes} numbers will change:</div>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {reassignPreview.changes.slice(0, 50).map((c, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-500 w-40 truncate">{c.name}</span>
+                        <span className="text-red-500 line-through">{c.old || 'none'}</span>
+                        <span className="text-gray-400">→</span>
+                        <span className="text-teal font-semibold">{c.new}</span>
+                      </div>
+                    ))}
+                    {reassignPreview.changes.length > 50 && (
+                      <div className="text-xs text-gray-400">...and {reassignPreview.changes.length - 50} more</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Assign New Role */}
       <div className="card p-5 mb-6">
@@ -286,18 +396,39 @@ export default function AdminRoles() {
                       {/* Role — editable inline */}
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {isEditing ? (
-                          <select className="form-select text-xs py-1 w-56" value={editRole}
-                            onChange={e => setEditRole(e.target.value)} autoFocus>
-                            {ROLE_GROUPS.map(g => (
-                              <optgroup key={g.group} label={g.group}>
-                                {g.roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                              </optgroup>
-                            ))}
-                          </select>
+                          <div className="flex flex-col gap-1.5">
+                            <div>
+                              <div className="text-xs text-gray-400 mb-0.5">Primary Role</div>
+                              <select className="form-select text-xs py-1 w-52" value={editRole}
+                                onChange={e => setEditRole(e.target.value)} autoFocus>
+                                {ROLE_GROUPS.map(g => (
+                                  <optgroup key={g.group} label={g.group}>
+                                    {g.roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                  </optgroup>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-400 mb-0.5 flex items-center gap-1">
+                                <Plus size={10} /> Secondary Role <span className="text-gray-300">(NC/Interim only)</span>
+                              </div>
+                              <select className="form-select text-xs py-1 w-52" value={editSecondaryRole}
+                                onChange={e => setEditSecondaryRole(e.target.value)}>
+                                {SECONDARY_ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                              </select>
+                            </div>
+                          </div>
                         ) : (
-                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getRoleColor(user.role)}`}>
-                            {roleLabel(user.role)}
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getRoleColor(user.role)}`}>
+                              {roleLabel(user.role)}
+                            </span>
+                            {user.secondary_role && (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-purple-50 text-purple-600 border-purple-100 flex items-center gap-1">
+                                <Plus size={9} /> {roleLabel(user.secondary_role)}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
 
@@ -337,8 +468,10 @@ export default function AdminRoles() {
       {/* Help text */}
       <div className="card p-4 mt-5 bg-navy/5 border border-navy/10">
         <div className="text-xs text-gray-500 space-y-1">
-          <div className="flex items-center gap-2"><Edit2 size={11} className="text-navy" /> <span>Click the <strong>pencil icon</strong> on any member to edit their role inline</span></div>
+          <div className="flex items-center gap-2"><Edit2 size={11} className="text-navy" /> <span>Click the <strong>pencil icon</strong> to edit primary and secondary roles inline</span></div>
+          <div className="flex items-center gap-2"><Plus size={11} className="text-purple-500" /> <span><strong>Secondary roles</strong> allow a member to hold e.g. Music Coordinator + NC Chair simultaneously — they keep all ministry access</span></div>
           <div className="flex items-center gap-2"><UserMinus size={11} className="text-red" /> <span>Click the <strong>remove icon</strong> to revoke their special role and return them to Full Member</span></div>
+          <div className="flex items-center gap-2"><Hash size={11} className="text-orange" /> <span>Use <strong>Reassign MUTCU Numbers</strong> to resequence numbers after member deletions</span></div>
           <div className="flex items-center gap-2"><Shield size={11} className="text-orange" /> <span>Role changes take effect <strong>immediately</strong> — the member's access updates on their next page load</span></div>
         </div>
       </div>

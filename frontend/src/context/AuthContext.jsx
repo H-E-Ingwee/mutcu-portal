@@ -62,7 +62,14 @@ export function AuthProvider({ children }) {
     localStorage.setItem('mutcu_user', JSON.stringify(userData))
   }, [])
 
-  const hasRole = (...roles) => user && roles.includes(user.role)
+  // hasRole checks BOTH primary role and secondary_role (dual roles support)
+  // e.g. a music_coordinator who is also nc_chair will pass hasRole('nc_chair')
+  const hasRole = (...roles) => {
+    if (!user) return false
+    if (roles.includes(user.role)) return true
+    if (user.secondary_role && roles.includes(user.secondary_role)) return true
+    return false
+  }
 
   // Super admin and EC Admin (Chairperson) — full access
   const isAdmin = () => hasRole('super_admin', 'ec_admin')
@@ -74,8 +81,10 @@ export function AuthProvider({ children }) {
   const isTreasurer = () => hasRole('super_admin', 'ec_admin', 'cu_treasurer')
 
   // NC roles — includes chair and secretary who can act
+  // Also checks secondary_role so EC members appointed to NC keep their ministry access
   const isNC = () => hasRole('super_admin', 'ec_admin', 'nc_chair', 'nc_secretary', 'nc_member')
   const isNCAction = () => hasRole('super_admin', 'ec_admin', 'nc_chair', 'nc_secretary')
+  const isNCChair = () => hasRole('nc_chair') || user?.secondary_role === 'nc_chair'
 
   // EC Coordinator (ministry coordinator EC member)
   const isECCoordinator = () => user && EC_COORDINATOR_ROLES.includes(user.role)
@@ -120,7 +129,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, loading, login, logout, updateUser,
-      hasRole, isAdmin, isSecretary, isTreasurer, isNC, isNCAction,
+      hasRole, isAdmin, isSecretary, isTreasurer, isNC, isNCAction, isNCChair,
       isECCoordinator, isMinistrySecretary, isLeadership,
       canManageRequisitions, isApproved, getMyMinistry,
       EC_COORDINATOR_ROLES, MINISTRY_SECRETARY_ROLES, NC_ROLES, INTERIM_ROLES,

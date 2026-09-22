@@ -11,6 +11,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [unverifiedEmail, setUnverifiedEmail] = useState(null)
+  const [rejectedAccount, setRejectedAccount] = useState(false)
+  const [deletedAccount, setDeletedAccount] = useState(false)
   const [resending, setResending] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
@@ -19,6 +21,8 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setUnverifiedEmail(null)
+    setRejectedAccount(false)
+    setDeletedAccount(false)
     setLoading(true)
     try {
       const { data } = await api.post('/auth/login', form)
@@ -31,18 +35,27 @@ export default function Login() {
         navigate('/change-password', { replace: true })
       } else if (!data.user.email_verified) {
         navigate('/verify-email', { replace: true })
+      } else {
+        navigate('/', { replace: true })
       }
     } catch (err) {
       const code = err.response?.data?.code
-      const msg  = err.response?.data?.error || 'Login failed. Please check your credentials.'
+      const msg = err.response?.data?.error || 'Login failed. Please check your credentials.'
 
       if (code === 'EMAIL_NOT_VERIFIED') {
         setUnverifiedEmail(err.response?.data?.email || form.email)
+        setError('')
+      } else if (code === 'ACCOUNT_REJECTED') {
+        setRejectedAccount(true)
+        setError('')
+      } else if (code === 'ACCOUNT_DELETED') {
+        setDeletedAccount(true)
         setError('')
       } else {
         setError(msg)
         toast.error(msg)
       }
+    } finally {
       setLoading(false)
     }
   }
@@ -130,6 +143,42 @@ export default function Login() {
                       }
                       {resending ? 'Sending...' : 'Resend Verification Email'}
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Rejected account notice */}
+            {rejectedAccount && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-red-600 text-xs font-bold">✕</span>
+                  </div>
+                  <div>
+                    <div className="font-montserrat font-bold text-red-700 text-sm mb-1">Application Rejected</div>
+                    <p className="text-red-600 text-xs leading-relaxed">
+                      Your membership application was not approved. Please contact the CU Secretary for more information,
+                      or <a href="/register" className="underline font-semibold">register again</a> with updated details.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Deleted account notice */}
+            {deletedAccount && (
+              <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-gray-500 text-xs font-bold">!</span>
+                  </div>
+                  <div>
+                    <div className="font-montserrat font-bold text-gray-700 text-sm mb-1">Account Removed</div>
+                    <p className="text-gray-600 text-xs leading-relaxed">
+                      This account has been removed from the system. Please contact the CU Secretary
+                      or <a href="/register" className="text-orange underline font-semibold">register a new account</a>.
+                    </p>
                   </div>
                 </div>
               </div>

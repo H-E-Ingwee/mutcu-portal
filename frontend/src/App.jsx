@@ -99,7 +99,12 @@ function ProtectedRoute({ children, roles }) {
   const effectiveUser = user || (token && savedUser ? JSON.parse(savedUser) : null)
   if (!effectiveUser) return <Navigate to="/login" replace />
   if (effectiveUser.must_change_password) return <Navigate to="/change-password" replace />
-  if (roles && !roles.includes(effectiveUser.role)) return <Navigate to="/dashboard" replace />
+  // Check BOTH primary role and secondary_role (dual roles support)
+  if (roles) {
+    const primaryOk = roles.includes(effectiveUser.role)
+    const secondaryOk = effectiveUser.secondary_role && roles.includes(effectiveUser.secondary_role)
+    if (!primaryOk && !secondaryOk) return <Navigate to="/dashboard" replace />
+  }
   return children
 }
 
@@ -170,7 +175,7 @@ function AppRoutes() {
         <Route path="admin/cycles/:id/appoint-nc" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminAppointNC /></ProtectedRoute>} />
         <Route path="admin/roles" element={<ProtectedRoute roles={['super_admin','ec_admin']}><AdminRoles /></ProtectedRoute>} />
         <Route path="admin/audit-log" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminAuditLog /></ProtectedRoute>} />
-        <Route path="admin/nc-data" element={<ProtectedRoute roles={['super_admin', 'ec_admin']}><NCDataManager /></ProtectedRoute>} />
+        <Route path="admin/nc-data" element={<ProtectedRoute roles={['super_admin', 'ec_admin', 'nc_chair']}><NCDataManager /></ProtectedRoute>} />
         <Route path="admin/positions" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminPositions /></ProtectedRoute>} />
         <Route path="admin/bulk-email" element={<ProtectedRoute roles={ADMIN_AND_SECRETARY}><AdminBulkEmail /></ProtectedRoute>} />
         <Route path="profile/associate-edit" element={<ProtectedRoute roles={['associate_member']}><AssociateProfileEdit /></ProtectedRoute>} />

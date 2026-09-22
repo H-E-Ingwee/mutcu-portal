@@ -407,6 +407,73 @@ async function sendTestEmail(toEmail) {
   return sendEmail({ to: toEmail, subject: 'MUTCU DMS — Test Email ✓', html })
 }
 
+// ─── 7. Generic Bulk Email (admin broadcast) ─────────────────────────────────
+// Sends a branded MUTCU email to a list of recipients via BCC batches
+async function sendBulkEmail({ recipientEmails, subject, body, senderName }) {
+  if (!recipientEmails || recipientEmails.length === 0) return { sent: 0, failed: 0 }
+  if (!BREVO_API_KEY) {
+    console.warn('[BULK EMAIL] No BREVO_API_KEY — email sending disabled')
+    return { sent: 0, failed: 0 }
+  }
+
+  const html = htmlWrap(
+    subject,
+    `
+    <h2 style="margin:0 0 16px;font-size:20px;color:#04003D;font-weight:800;">${subject}</h2>
+    <div style="font-size:14px;color:#374151;line-height:1.8;white-space:pre-wrap;">${body.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E8ECF0;">
+      <p style="margin:0;font-size:12px;color:#9CA3AF;">
+        Sent by <strong>${senderName || 'MUTCU Administration'}</strong> via MUTCU DMS<br>
+        <a href="${FRONTEND}" style="color:#FF9700;text-decoration:none;">portal.mutcu.org</a>
+      </p>
+    </div>
+    `
+  )
+
+  const BATCH = 50
+  let sent = 0
+  let failed = 0
+
+  for (let i = 0; i < recipientEmails.length; i += BATCH) {
+    const batch = recipientEmails.slice(i, i + BATCH).filter(e => e && e.includes('@'))
+    if (batch.length === 0) continue
+
+    const payload = {
+      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      to: [{ email: FROM_EMAIL, name: FROM_NAME }], // send to self
+      bcc: batch.map(email => ({ email: email.trim() })),
+      replyTo: { email: REPLY_TO },
+      subject,
+      htmlContent: html,
+    }
+
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': BREVO_API_KEY,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        console.error('[BULK EMAIL ERROR] Batch', i / BATCH + 1, ':', err.message)
+        failed += batch.length
+      } else {
+        console.log(`[BULK EMAIL SENT] BCC batch ${i / BATCH + 1}: ${batch.length} recipients`)
+        sent += batch.length
+      }
+    } catch (err) {
+      console.error('[BULK EMAIL ERROR]', err.message)
+      failed += batch.length
+    }
+  }
+
+  return { sent, failed }
+}
+
 module.exports = {
   sendEmail,
   sendTestEmail,
@@ -416,5 +483,6 @@ module.exports = {
   sendRejectionEmail,
   sendMemberMessageNotification,
   sendCycleAnnouncementEmail,
+  sendBulkEmail,
   verifyConnection,
 }

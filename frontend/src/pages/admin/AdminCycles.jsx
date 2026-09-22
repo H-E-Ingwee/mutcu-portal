@@ -16,7 +16,7 @@ const NC_CHAIR_ALLOWED_STATUSES = ['vetting','nominees_published','objection_per
 export default function AdminCycles() {
   const { user } = useAuth()
   const isAdmin = ['super_admin','ec_admin'].includes(user?.role)
-  const isNCChair = user?.role === 'nc_chair'
+  const isNCChair = (user?.role === 'nc_chair' || user?.secondary_role === 'nc_chair')
   const isNCSecretary = user?.role === 'nc_secretary'
   // NC Chair gets action buttons; NC Secretary is read-only
   const canAct = isAdmin || isNCChair

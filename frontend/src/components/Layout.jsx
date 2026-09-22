@@ -169,9 +169,9 @@ export default function Layout() {
                   <NavItem to="/nc" icon={ClipboardList} label="NC Dashboard" />
                   <NavItem to="/nc/objections" icon={MessageSquare} label="Objections" />
                   <NavItem to="/nc/suggestions" icon={Mic2} label="Suggestions" />
-                  {user?.role === 'nc_chair' && (
+                  {(user?.role === 'nc_chair' || user?.secondary_role === 'nc_chair') && (
                     <>
-                      <NavItem to="/admin/cycles" icon={BookOpen} label="Nomination Cycles" />
+                      <NavItem to="/admin/cycles" icon={Settings} label="Nomination Cycles" />
                       <NavItem to="/admin/nc-data" icon={Shield} label="NC Data Manager" />
                     </>
                   )}

@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const supabase = require('../lib/supabase')
 const { authenticate, requireRole } = require('../middleware/auth')
-const { sendCycleAnnouncementEmail } = require('../lib/email')
+const { sendCycleAnnouncementEmail , sendBulkEmail } = require('../lib/email')
 
 const ADMIN = ['super_admin','ec_admin']
 const ADMIN_AND_NC_CHAIR = ['super_admin','ec_admin','nc_chair']
@@ -243,7 +243,7 @@ router.post('/cycles/:id/commission', authenticate, requireRole(...ADMIN), async
 // GET /api/admin/roles
 router.get('/roles', authenticate, requireRole('super_admin', 'ec_admin'), async (req, res) => {
   try {
-    const { data } = await supabase.from('users').select('id,name,email,role,enrollment_status').neq('role','full_member').order('name')
+    const { data } = await supabase.from('users').select('id,name,email,role,secondary_role,enrollment_status,photo_url,mutcu_number').neq('role','full_member').order('name')
     res.json({ users: data||[] })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -263,7 +263,7 @@ router.put('/roles/:userId', authenticate, requireRole('super_admin', 'ec_admin'
     const { data: oldUser } = await supabase.from('users').select('id,name,email,role').eq('id', req.params.userId).single()
     const oldRole = oldUser?.role || 'unknown'
 
-    const { data, error } = await supabase.from('users').update({ role }).eq('id', req.params.userId).select('id,name,email,role').single()
+    const { data, error } = await supabase.from('users').update({ role }).eq('id', req.params.userId).select('id,name,email,role,secondary_role,photo_url,mutcu_number').single()
     if (error) throw error
 
     // Audit log — role change
@@ -366,6 +366,161 @@ router.get('/settings', authenticate, requireRole(...ADMIN_AND_SECRETARY), async
       reply_email: process.env.MAIL_REPLY_TO || 'admin@mutcu.org',
     }
   })
+})
+
+// POST /api/admin/bulk-email — send branded email to selected members (BCC for privacy)
+router.post('/bulk-email', authenticate, requireRole('super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary'), async (req, res) => {
+  try {
+    const { subject, body, recipient_ids } = req.body
+    if (!subject?.trim()) return res.status(400).json({ error: 'Subject is required' })
+    if (!body?.trim()) return res.status(400).json({ error: 'Message body is required' })
+    if (!recipient_ids || recipient_ids.length === 0) return res.status(400).json({ error: 'No recipients selected' })
+
+    // Fetch emails for selected member IDs
+    const { data: members, error } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .in('id', recipient_ids)
+      .eq('is_active', true)
+      .not('email', 'is', null)
+
+    if (error) throw error
+    if (!members || members.length === 0) return res.status(400).json({ error: 'No valid recipients found' })
+
+    const recipientEmails = members.map(m => m.email).filter(Boolean)
+
+    // Send immediately — respond after sending
+    const result = await sendBulkEmail({
+      recipientEmails,
+      subject: subject.trim(),
+      body: body.trim(),
+      senderName: req.user.name,
+    })
+
+    // Audit log
+    supabase.from('audit_logs').insert({
+      actor_id: req.user.id,
+      action: 'email.bulk_sent',
+      entity_type: 'system',
+      entity_id: req.user.id,
+      description: `Bulk email sent by ${req.user.name}: "${subject}" to ${result.sent} members (${result.failed} failed)`,
+    }).then(() => {}).catch(() => {})
+
+    res.json({
+      message: `Email sent to ${result.sent} members`,
+      sent: result.sent,
+      failed: result.failed,
+      total_recipients: recipientEmails.length,
+    })
+  } catch (err) {
+    console.error('[BULK EMAIL ROUTE ERROR]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PUT /api/admin/roles/:userId/secondary — add/remove a secondary role (dual roles for EC+NC)
+// Allows a member to hold e.g. music_coordinator + nc_chair simultaneously
+router.put('/roles/:userId/secondary', authenticate, requireRole('super_admin', 'ec_admin'), async (req, res) => {
+  try {
+    const { secondary_role } = req.body
+    const validRoles = ['nc_chair','nc_secretary','nc_member','interim_chair','interim_secretary','interim_treasurer',
+      'interim_prayer_coordinator','interim_music_coordinator','interim_missions_coordinator',
+      'interim_bible_study_coordinator','interim_tech_media_coordinator','interim_creative_arts_coordinator',null]
+
+    if (secondary_role !== null && !validRoles.includes(secondary_role)) {
+      return res.status(400).json({ error: 'Invalid secondary role. Secondary roles are limited to NC and Interim positions.' })
+    }
+
+    const { data: oldUser } = await supabase.from('users').select('id,name,email,role,secondary_role').eq('id', req.params.userId).single()
+    if (!oldUser) return res.status(404).json({ error: 'User not found' })
+
+    const { data, error } = await supabase.from('users')
+      .update({ secondary_role: secondary_role || null })
+      .eq('id', req.params.userId)
+      .select('id,name,email,role,secondary_role')
+      .single()
+    if (error) throw error
+
+    // Audit log
+    supabase.from('audit_logs').insert({
+      actor_id: req.user.id,
+      action: 'role.secondary_changed',
+      entity_type: 'user',
+      entity_id: req.params.userId,
+      description: `Secondary role for ${data.name}: ${oldUser.secondary_role || 'none'} → ${secondary_role || 'none'} | Changed by: ${req.user.name}`,
+    }).then(() => {}).catch(() => {})
+
+    res.json({ user: data, message: secondary_role ? `Secondary role set to ${secondary_role}` : 'Secondary role removed' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/admin/members/reassign-numbers — resequence MUTCU numbers after deletions
+// Reassigns MUTCU-YYYY-XXXX numbers in registration order, preserving relative order
+router.post('/members/reassign-numbers', authenticate, requireRole('super_admin'), async (req, res) => {
+  try {
+    const { dry_run = false } = req.body
+
+    // Get all active/pending/approved members ordered by original registration (created_at)
+    const { data: members, error } = await supabase
+      .from('users')
+      .select('id,name,email,mutcu_number,membership_type,created_at,enrollment_status')
+      .not('enrollment_status', 'in', '("rejected","deleted")')
+      .not('membership_type', 'eq', 'associate')
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+
+    const year = new Date().getFullYear()
+    const updates = []
+    let counter = 1
+
+    for (const member of members) {
+      const newNumber = `MUTCU-${year}-${String(counter).padStart(4, '0')}`
+      if (member.mutcu_number !== newNumber) {
+        updates.push({ id: member.id, old: member.mutcu_number, new: newNumber, name: member.name })
+      }
+      counter++
+    }
+
+    // Also handle associates separately with MUTCU-A prefix
+    const { data: associates } = await supabase
+      .from('users')
+      .select('id,name,email,mutcu_number,created_at,enrollment_status')
+      .not('enrollment_status', 'in', '("rejected","deleted")')
+      .eq('membership_type', 'associate')
+      .order('created_at', { ascending: true })
+
+    let assocCounter = 1
+    for (const assoc of (associates || [])) {
+      const newNumber = `MUTCU-A-${year}-${String(assocCounter).padStart(4, '0')}`
+      if (assoc.mutcu_number !== newNumber) {
+        updates.push({ id: assoc.id, old: assoc.mutcu_number, new: newNumber, name: assoc.name })
+      }
+      assocCounter++
+    }
+
+    if (dry_run) {
+      return res.json({ dry_run: true, changes: updates, total_changes: updates.length })
+    }
+
+    // Apply updates
+    let applied = 0
+    for (const u of updates) {
+      const { error: upErr } = await supabase.from('users').update({ mutcu_number: u.new }).eq('id', u.id)
+      if (!upErr) applied++
+    }
+
+    // Audit log
+    supabase.from('audit_logs').insert({
+      actor_id: req.user.id,
+      action: 'members.numbers_reassigned',
+      entity_type: 'system',
+      entity_id: req.user.id,
+      description: `MUTCU numbers reassigned: ${applied} members updated by ${req.user.name}`,
+    }).then(() => {}).catch(() => {})
+
+    res.json({ message: `MUTCU numbers reassigned successfully`, applied, total_changes: updates.length, changes: updates })
+  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 module.exports = router

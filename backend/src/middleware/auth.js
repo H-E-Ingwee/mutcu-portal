@@ -42,11 +42,15 @@ async function authenticate(req, res, next) {
   }
 }
 
+// requireRole checks BOTH primary role and secondary_role (dual roles support)
+// e.g. a music_coordinator who is also nc_chair will pass requireRole('nc_chair')
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' })
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: `Required role: ${roles.join(' or ')}. Your role: ${req.user.role}` })
+    const primaryMatch = roles.includes(req.user.role)
+    const secondaryMatch = req.user.secondary_role && roles.includes(req.user.secondary_role)
+    if (!primaryMatch && !secondaryMatch) {
+      return res.status(403).json({ error: `Required role: ${roles.join(' or ')}. Your role: ${req.user.role}${req.user.secondary_role ? ' + ' + req.user.secondary_role : ''}` })
     }
     next()
   }

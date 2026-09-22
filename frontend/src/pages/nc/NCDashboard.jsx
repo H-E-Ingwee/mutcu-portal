@@ -43,14 +43,17 @@ export default function NCDashboard() {
   const [loadingPublishSummary, setLoadingPublishSummary] = useState(false)
   const [printing, setPrinting] = useState(false)
 
-  const canAct = isNCAction ? isNCAction() : false
+  // canAct: NC Chair or Secretary can take actions (checks both primary and secondary role)
+  const canAct = (isNCAction ? isNCAction() : false) ||
+    user?.secondary_role === 'nc_chair' ||
+    user?.secondary_role === 'nc_secretary'
 
   useEffect(() => {
     api.get('/nc/dashboard').then(r => setData(r.data)).finally(() => setLoading(false))
   }, [])
 
   const openPublishModal = async () => {
-    if (!canAct && !['ec_admin', 'super_admin'].includes(user?.role)) return
+    if (!canAct && !['ec_admin', 'super_admin', 'nc_chair'].includes(user?.role) && user?.secondary_role !== 'nc_chair') return
     setLoadingPublishSummary(true)
     setShowPublishModal(true)
     try {
@@ -188,7 +191,14 @@ export default function NCDashboard() {
 
   const myNCRole = ncMembers?.find(m => m.user_id === user?.id)?.nc_role
   // Fall back to system role if not found in nc_members table
-  const effectiveNCRole = myNCRole || (user?.role === 'nc_chair' ? 'chairperson' : user?.role === 'nc_secretary' ? 'secretary' : user?.role === 'nc_member' ? 'member' : null)
+  // Check both primary role and secondary_role for dual-role members
+  const userPrimaryRole = user?.role
+  const userSecondaryRole = user?.secondary_role
+  const effectiveNCRole = myNCRole || (
+    (userPrimaryRole === 'nc_chair' || userSecondaryRole === 'nc_chair') ? 'chairperson' :
+    (userPrimaryRole === 'nc_secretary' || userSecondaryRole === 'nc_secretary') ? 'secretary' :
+    (userPrimaryRole === 'nc_member' || userSecondaryRole === 'nc_member') ? 'member' : null
+  )
   const roleLabel = effectiveNCRole === 'chairperson' ? '🏛️ NC Chairperson' : effectiveNCRole === 'secretary' ? '📋 NC Secretary' : effectiveNCRole === 'member' ? '👁️ NC Member (View Only)' : ''
 
   // Accurate stats
@@ -244,7 +254,7 @@ export default function NCDashboard() {
             </button>
           )}
           {/* Delete nomination data */}
-          {['super_admin', 'ec_admin', 'nc_chair'].includes(user?.role) && ['commissioned', 'cancelled'].includes(cycle.status) && (
+          {(['super_admin', 'ec_admin', 'nc_chair'].includes(user?.role) || user?.secondary_role === 'nc_chair') && ['commissioned', 'cancelled'].includes(cycle.status) && (
             <button onClick={deleteNominationData} className="btn-outline btn-sm text-red border-red/30">
               <Trash2 size={14} />Delete Data
             </button>

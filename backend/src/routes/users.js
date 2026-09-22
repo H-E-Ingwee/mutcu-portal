@@ -289,4 +289,48 @@ router.post('/verify-email-change', authenticate, async (req, res) => {
   }
 });
 
+// DELETE /api/users/:id/hard — permanently delete (super_admin only)
+// Use for: test accounts, wrongly registered accounts, associates who registered as students
+router.delete('/:id/hard', authenticate, requireRole('super_admin'), async (req, res) => {
+  try {
+    const { data: user } = await supabase.from('users').select('id,name,email,role,mutcu_number').eq('id', req.params.id).single()
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    if (user.role === 'super_admin') return res.status(403).json({ error: 'Cannot delete Super Admin account' })
+
+    // Delete related data first (cascade order)
+    await supabase.from('recommendations').delete().eq('recommender_id', req.params.id).catch(() => {})
+    await supabase.from('recommendations').delete().eq('candidate_id', req.params.id).catch(() => {})
+    await supabase.from('vetting_decisions').delete().eq('candidate_id', req.params.id).catch(() => {})
+    await supabase.from('nominees').delete().eq('candidate_id', req.params.id).catch(() => {})
+    await supabase.from('objections').delete().eq('objector_id', req.params.id).catch(() => {})
+    await supabase.from('nc_members').delete().eq('user_id', req.params.id).catch(() => {})
+    await supabase.from('appointments').delete().eq('user_id', req.params.id).catch(() => {})
+    await supabase.from('messages').delete().eq('sender_id', req.params.id).catch(() => {})
+    await supabase.from('mutcu_notifications').delete().eq('user_id', req.params.id).catch(() => {})
+    await supabase.from('attendance_records').delete().eq('user_id', req.params.id).catch(() => {})
+    await supabase.from('event_rsvps').delete().eq('user_id', req.params.id).catch(() => {})
+    await supabase.from('requisitions').delete().eq('requested_by', req.params.id).catch(() => {})
+    await supabase.from('income_entries').delete().eq('recorded_by', req.params.id).catch(() => {})
+    await supabase.from('audit_logs').delete().eq('actor_id', req.params.id).catch(() => {})
+
+    // Hard delete the user
+    const { error } = await supabase.from('users').delete().eq('id', req.params.id)
+    if (error) throw error
+
+    // Log the deletion
+    supabase.from('audit_logs').insert({
+      actor_id: req.user.id,
+      action: 'user.hard_deleted',
+      entity_type: 'user',
+      entity_id: req.params.id,
+      description: `User ${user.name} (${user.email}, ${user.mutcu_number || 'no number'}) permanently deleted by ${req.user.name}`,
+    }).then(() => {}).catch(() => {})
+
+    res.json({ message: `${user.name} permanently deleted from the system` })
+  } catch (err) {
+    console.error('[HARD DELETE ERROR]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router;
