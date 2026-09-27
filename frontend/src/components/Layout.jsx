@@ -196,6 +196,7 @@ export default function Layout() {
                   <NavItem to="/vp/ladies" icon={Users} label="Ladies & Hospitality" />
                   <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
                   <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
@@ -207,6 +208,7 @@ export default function Layout() {
                   <NavItem to="/vp/gents" icon={Users} label="Gents & Associates" />
                   <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
                   <NavItem to="/secretary/ministry-updates" icon={Megaphone} label="Post Updates" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
                 </>
               )}
