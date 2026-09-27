@@ -26,23 +26,66 @@ const NC_ROLES = ['nc_chair', 'nc_secretary', 'nc_member']
 const INTERIM_ROLES = ['interim_chair', 'interim_secretary', 'interim_treasurer']
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  // Initialize from localStorage cache for instant load (verified async below)
+  const [user, setUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('mutcu_user')
+      return cached ? JSON.parse(cached) : null
+    } catch { return null }
+  })
+  const [loading, setLoading] = useState(() => {
+    // If no token, not loading. If cached user exists, show UI immediately
+    const token = localStorage.getItem('mutcu_token')
+    if (!token) return false
+    const cached = localStorage.getItem('mutcu_user')
+    return !cached // only show spinner if no cached user
+  })
 
   useEffect(() => {
     const token = localStorage.getItem('mutcu_token')
     if (!token) { setLoading(false); return }
-    api.get('/auth/me')
-      .then(res => {
+
+    // Load cached user instantly — no spinner, no flicker
+    const cached = localStorage.getItem('mutcu_user')
+    if (cached) {
+      try {
+        setUser(JSON.parse(cached))
+        setLoading(false) // show UI immediately from cache
+      } catch {}
+    }
+
+    // Verify token in background with retry logic
+    // Does NOT log out on timeout/network error — only on explicit 401
+    const verifyWithRetry = async (retries = 2) => {
+      try {
+        const res = await api.get('/auth/me')
         setUser(res.data.user)
         localStorage.setItem('mutcu_user', JSON.stringify(res.data.user))
-      })
-      .catch(() => {
-        localStorage.removeItem('mutcu_token')
-        localStorage.removeItem('mutcu_user')
-        setUser(null)
-      })
-      .finally(() => setLoading(false))
+      } catch (err) {
+        const status = err.response?.status
+        const isNetworkError = !err.response || err.code === 'ECONNABORTED'
+
+        if (isNetworkError && retries > 0) {
+          // Server busy / cold start — retry after delay, don't log out
+          console.warn('[AUTH] Server unreachable, retrying in 3s...', retries, 'retries left')
+          setTimeout(() => verifyWithRetry(retries - 1), 3000)
+          return
+        }
+
+        if (status === 401) {
+          // Genuine auth failure — clear session
+          localStorage.removeItem('mutcu_token')
+          localStorage.removeItem('mutcu_user')
+          setUser(null)
+        }
+        // For 500/503/timeout after retries — keep cached user, don't log out
+        // User will be re-verified on next navigation
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    verifyWithRetry()
   }, [])
 
   const login = useCallback((token, userData) => {

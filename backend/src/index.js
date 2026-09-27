@@ -55,6 +55,14 @@ app.use('/api/admin',         require('./routes/admin'))
 app.use('/api/analytics',     require('./routes/analytics'))
 app.use('/api/upload',        require('./routes/upload'))
 app.use('/api/notifications', require('./routes/notifications'))
+// ─── Health / keep-alive ping (use UptimeRobot to ping every 5 min) ──────────
+app.get('/ping', (req, res) => res.json({ 
+  status: 'ok', 
+  time: new Date().toISOString(),
+  uptime: Math.floor(process.uptime()) + 's'
+}))
+app.get('/health', (req, res) => res.json({ status: 'healthy' }))
+
 app.use('/api/messages',      require('./routes/messages'))
 app.use('/api/announcements', require('./routes/announcements'))
 app.use('/api/leadership',    require('./routes/leadership'))
@@ -80,6 +88,9 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`MUTCU DMS API v2.1 running on port ${PORT}`)
+  // Ping DB on startup to warm up connection
+  const { pingDatabase } = require('./lib/supabase')
+  pingDatabase()
   // Verify Brevo SMTP connection on startup
   const { verifyConnection } = require('./lib/email')
   verifyConnection()

@@ -173,6 +173,8 @@ export default function Register() {
   const [showCropper, setShowCropper] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [busyMessage, setBusyMessage] = useState('')
+  const [retryCountdown, setRetryCountdown] = useState(0)
   const [gradYear, setGradYear] = useState(null)
   const [school, setSchool] = useState('')
   const { login } = useAuth()
@@ -213,6 +215,13 @@ export default function Register() {
     }
   }
 
+  // Student ID validation — MUT format: XX###/####/YYYY e.g. SC202/5398/2025
+  const validateStudentId = (id) => {
+    if (!id) return false
+    // Pattern: 2 letters + 3 digits / 3-4 digits / 4-digit year
+    return /^[A-Z]{2}\d{3}\/\d{3,5}\/\d{4}$/.test(id.trim().toUpperCase())
+  }
+
   // Phone validation — Kenyan format: 07XX, 01XX, or +254
   const validatePhone = (phone) => {
     const cleaned = phone.replace(/\s/g, '')
@@ -232,6 +241,7 @@ export default function Register() {
   const validateStep2 = () => {
     if (!form.gender) { toast.error('Please select your gender'); return false }
     if (!form.student_id.trim()) { toast.error('Student registration number is required'); return false }
+    if (!validateStudentId(form.student_id)) { toast.error('Invalid student ID format. Use format: XX###/####/YYYY (e.g. SC202/5398/2025)'); return false }
     if (!form.year_of_study) { toast.error('Please select your year of study'); return false }
     const yr = parseInt(form.year_of_study)
     if (yr > maxYear) { toast.error(`Maximum year for ${form.course_type} is Year ${maxYear}`); return false }
@@ -274,13 +284,64 @@ export default function Register() {
       toast.success('Registration successful! Please check your email to verify your account.')
       navigate('/verify-email')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Registration failed')
+      const code = err.response?.data?.code
+      const msg = err.response?.data?.error || 'Registration failed. Please try again.'
+
+      if (code === 'REGISTRATION_BUSY' || code === 'SERVER_BUSY' || code === 'TIMEOUT' || code === 'NETWORK_ERROR') {
+        // Server busy — auto retry after countdown
+        const waitSecs = err.response?.data?.retry_after || 15
+        setBusyMessage(msg)
+        setLoading(false)
+
+        let remaining = waitSecs
+        setRetryCountdown(remaining)
+        const interval = setInterval(() => {
+          remaining--
+          setRetryCountdown(remaining)
+          if (remaining <= 0) {
+            clearInterval(interval)
+            setBusyMessage('')
+            setRetryCountdown(0)
+            // Auto-retry the submission
+            handleSubmit(e)
+          }
+        }, 1000)
+        return
+      }
+
+      toast.error(msg)
     } finally { setLoading(false) }
   }
 
   const steps = ['Personal Info', 'Academic Details', 'Ministry & Declaration']
 
+  // Busy/retry banner component
+  const BusyBanner = () => busyMessage ? (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-orange/10 border border-orange/30 rounded-2xl px-6 py-4 shadow-xl max-w-md w-full mx-4">
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-orange/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span className="text-orange text-sm font-bold">⏳</span>
+        </div>
+        <div className="flex-1">
+          <div className="font-montserrat font-bold text-navy text-sm mb-1">Server is Busy</div>
+          <p className="text-gray-600 text-xs leading-relaxed">{busyMessage}</p>
+          {retryCountdown > 0 && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                <div className="bg-orange h-1.5 rounded-full transition-all duration-1000"
+                  style={{ width: `${(retryCountdown / 15) * 100}%` }} />
+              </div>
+              <span className="text-xs text-orange font-bold">Retrying in {retryCountdown}s</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null
+
   return (
+    <>
+    <BusyBanner />
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       {showCropper && rawPhotoSrc && (
         <PhotoCropper
@@ -479,8 +540,8 @@ export default function Register() {
 
                     <div>
                       <label className="form-label">Student Registration No. <span className="text-red">*</span></label>
-                      <input type="text" className="form-input" placeholder="e.g. SC200/0396/2022"
-                        value={form.student_id} onChange={e => set('student_id', e.target.value)} required />
+                      <input type="text" className="form-input" placeholder="e.g. SC202/5398/2025 (CourseCode/Serial/Year)"
+                        value={form.student_id} onChange={e => set('student_id', e.target.value.toUpperCase())} required />
                       {form.student_id && (
                         <div className="mt-1.5 flex gap-3 text-xs flex-wrap">
                           {school && <span className="text-teal font-semibold">📚 {school}</span>}
@@ -624,5 +685,6 @@ export default function Register() {
         </div>
       </div>
     </div>
+    </>
   )
 }
