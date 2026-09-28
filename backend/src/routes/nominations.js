@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
+const { withTimeout } = require('../lib/supabase');
+
+// ─── Concurrency limiter for nominations ──────────────────────────────────────
+// Prevents race conditions and DB overload during mass nomination events
+let activeNominations = 0
+const MAX_CONCURRENT_NOMINATIONS = 20
 const { authenticate, requireApproved, requireRole } = require('../middleware/auth');
 const { checkEligibility, canNominate, isFinalist, isFirstYear } = require('../lib/eligibility');
 
@@ -104,6 +110,16 @@ router.get('/eligible/:positionId', authenticate, requireApproved, async (req, r
 
 // POST /api/nominations/recommend — submit prayerful recommendation
 router.post('/recommend', authenticate, requireApproved, async (req, res) => {
+  // Throttle concurrent nominations to prevent race conditions
+  if (activeNominations >= MAX_CONCURRENT_NOMINATIONS) {
+    return res.status(429).json({
+      error: 'The system is processing many nominations right now. Please wait a moment and try again — your nomination will not be lost.',
+      code: 'NOMINATION_BUSY',
+      retry_after: 5,
+    })
+  }
+
+  activeNominations++
   try {
     const { cycle_id, position_id, candidate_id, prayerful_note } = req.body;
     const user = req.user;
@@ -115,18 +131,37 @@ router.post('/recommend', authenticate, requireApproved, async (req, res) => {
     }
 
     // Check duplicate — one recommendation per recommender per position (Art. 17.2.iii)
-    const { data: existing } = await supabase.from('recommendations')
-      .select('id').eq('cycle_id', cycle_id).eq('position_id', position_id).eq('recommender_id', user.id).single();
+    // Use withTimeout to prevent hanging under load
+    const { data: existing } = await withTimeout(
+      supabase.from('recommendations')
+        .select('id').eq('cycle_id', cycle_id).eq('position_id', position_id).eq('recommender_id', user.id).single(),
+      5000, 'duplicate nomination check'
+    )
     if (existing) {
       return res.status(400).json({ error: 'You have already submitted a prayerful recommendation for this position. Only one recommendation per position is allowed.' });
     }
 
-    // Validate candidate eligibility
-    const { data: candidate } = await supabase.from('users')
-      .select('id,name,year_of_study,gender,primary_ministry,mutcu_number,membership_type,is_finalist,disciplinary_status,sgc_executive_role,faith_declaration_signed,course_type,school_prefix')
-      .eq('id', candidate_id).single();
+    // Validate candidate + cycle in one combined query (saves a round trip)
+    const [candidateRes, cycleRes] = await Promise.all([
+      withTimeout(
+        supabase.from('users')
+          .select('id,name,year_of_study,gender,primary_ministry,mutcu_number,membership_type,is_finalist,disciplinary_status,sgc_executive_role,faith_declaration_signed,course_type,school_prefix')
+          .eq('id', candidate_id).single(),
+        5000, 'candidate lookup'
+      ),
+      withTimeout(
+        supabase.from('nomination_cycles').select('status').eq('id', cycle_id).single(),
+        5000, 'cycle status check'
+      )
+    ])
+
+    const candidate = candidateRes.data
+    const cycle = cycleRes.data
 
     if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
+    if (!cycle || cycle.status !== 'nominations_open') {
+      return res.status(400).json({ error: 'Nominations are not currently open.' });
+    }
 
     // First-years cannot be nominated
     if (isFirstYear(candidate)) {
@@ -138,16 +173,35 @@ router.post('/recommend', authenticate, requireApproved, async (req, res) => {
       return res.status(400).json({ error: 'Finalist students cannot be nominated for EC positions — they serve in the Nomination College (Art. 12.4.b)' });
     }
 
-    const { data, error } = await supabase.from('recommendations').insert({
-      cycle_id, position_id, candidate_id,
-      recommender_id: user.id,
-      prayerful_note: prayerful_note || null,
-    }).select().single();
+    const { data, error } = await withTimeout(
+      supabase.from('recommendations').insert({
+        cycle_id, position_id, candidate_id,
+        recommender_id: user.id,
+        prayerful_note: prayerful_note || null,
+      }).select().single(),
+      6000, 'recommendation insert'
+    )
 
-    if (error) throw error;
+    // Handle unique constraint violation (race condition — two simultaneous submits)
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: 'You have already submitted a recommendation for this position.' })
+      }
+      throw error
+    }
+
     res.status(201).json({ recommendation: data, message: 'Prayerful recommendation submitted successfully' });
   } catch (err) {
+    console.error('[RECOMMEND ERROR]', err.message)
+    if (err.message?.includes('timed out')) {
+      return res.status(503).json({
+        error: 'The server is under heavy load. Please wait a few seconds and try again.',
+        code: 'SERVER_BUSY',
+      })
+    }
     res.status(500).json({ error: err.message });
+  } finally {
+    activeNominations--
   }
 });
 
@@ -164,23 +218,38 @@ router.post('/suggest', authenticate, requireApproved, async (req, res) => {
     }
 
     // Check duplicate — one suggestion per suggester per position
-    const { data: existing } = await supabase.from('free_text_suggestions')
-      .select('id').eq('cycle_id', cycle_id).eq('position_id', position_id).eq('suggester_id', user.id).single();
+    const { data: existing } = await withTimeout(
+      supabase.from('free_text_suggestions')
+        .select('id').eq('cycle_id', cycle_id).eq('position_id', position_id).eq('suggester_id', user.id).single(),
+      5000, 'duplicate suggestion check'
+    )
     if (existing) {
       return res.status(400).json({ error: 'You have already submitted a suggestion for this position. Only one suggestion per position is allowed.' });
     }
 
-    const { data, error } = await supabase.from('free_text_suggestions').insert({
-      cycle_id, position_id,
-      suggester_id: user.id,
-      suggested_name, description, why_recommend,
-      nc_action: 'pending',
-      is_anonymous: true, // Always anonymous — suggester identity hidden from NC
-    }).select().single();
+    const { data, error } = await withTimeout(
+      supabase.from('free_text_suggestions').insert({
+        cycle_id, position_id,
+        suggester_id: user.id,
+        suggested_name, description, why_recommend,
+        nc_action: 'pending',
+        is_anonymous: true,
+      }).select().single(),
+      6000, 'suggestion insert'
+    )
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: 'You have already submitted a suggestion for this position.' })
+      }
+      throw error
+    }
     res.status(201).json({ suggestion: data, message: 'Your suggestion has been submitted anonymously to the Nomination College' });
   } catch (err) {
+    console.error('[SUGGEST ERROR]', err.message)
+    if (err.message?.includes('timed out')) {
+      return res.status(503).json({ error: 'Server is busy. Please try again in a moment.', code: 'SERVER_BUSY' })
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -258,16 +327,28 @@ router.post('/objections', authenticate, requireApproved, async (req, res) => {
     const { data: nominee } = await supabase.from('nominees').select('cycle_id').eq('id', nominee_id).single();
     if (!nominee) return res.status(404).json({ error: 'Nominee not found' });
 
-    const { data, error } = await supabase.from('objections').insert({
-      cycle_id: nominee.cycle_id,
-      nominee_id,
-      objector_id: user.id,
-      grounds,
-    }).select().single();
+    const { data, error } = await withTimeout(
+      supabase.from('objections').insert({
+        cycle_id: nominee.cycle_id,
+        nominee_id,
+        objector_id: user.id,
+        grounds,
+      }).select().single(),
+      6000, 'objection insert'
+    )
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: 'You have already submitted an objection for this nominee.' })
+      }
+      throw error
+    }
     res.status(201).json({ objection: data, message: 'Objection submitted to the Nomination College' });
   } catch (err) {
+    console.error('[OBJECTION ERROR]', err.message)
+    if (err.message?.includes('timed out')) {
+      return res.status(503).json({ error: 'Server is busy. Please try again in a moment.', code: 'SERVER_BUSY' })
+    }
     res.status(500).json({ error: err.message });
   }
 });

@@ -102,7 +102,18 @@ export default function Nominations() {
       setSelectedCandidate(null)
       setNote('')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Submission failed')
+      const code = err.response?.data?.code
+      const msg = err.response?.data?.error || 'Submission failed. Please try again.'
+      if (code === 'NOMINATION_BUSY' || code === 'SERVER_BUSY' || code === 'TIMEOUT') {
+        const secs = err.response?.data?.retry_after || 5
+        toast.loading(`Server busy — retrying in ${secs} seconds...`, { id: 'nom-busy', duration: secs * 1000 })
+        setTimeout(() => {
+          toast.dismiss('nom-busy')
+          submitRecommendation(e)
+        }, secs * 1000)
+        return
+      }
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -126,7 +137,18 @@ export default function Nominations() {
       setFreeText({ suggested_name: '', description: '', why_recommend: '' })
       setSelectedPosition('')
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Submission failed')
+      const code = err.response?.data?.code
+      const msg = err.response?.data?.error || 'Submission failed. Please try again.'
+      if (code === 'NOMINATION_BUSY' || code === 'SERVER_BUSY' || code === 'TIMEOUT') {
+        const secs = err.response?.data?.retry_after || 5
+        toast.loading(`Server busy — retrying in ${secs} seconds...`, { id: 'sug-busy', duration: secs * 1000 })
+        setTimeout(() => {
+          toast.dismiss('sug-busy')
+          submitSuggestion(e)
+        }, secs * 1000)
+        return
+      }
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }

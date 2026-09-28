@@ -61,3 +61,43 @@ CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE is_acti
 
 -- 4. Verify the counter table is populated
 SELECT key, value FROM mutcu_counters ORDER BY key;
+
+-- ============================================================
+-- Nomination Race Condition Prevention
+-- ============================================================
+
+-- Unique constraint: one recommendation per recommender per position per cycle
+-- This is the DB-level safety net — even if two requests slip past the code check,
+-- the DB will reject the second one with error code 23505
+ALTER TABLE recommendations 
+  DROP CONSTRAINT IF EXISTS recommendations_unique_recommender_position;
+ALTER TABLE recommendations
+  ADD CONSTRAINT recommendations_unique_recommender_position 
+  UNIQUE (cycle_id, position_id, recommender_id);
+
+-- Unique constraint: one suggestion per suggester per position per cycle
+ALTER TABLE free_text_suggestions
+  DROP CONSTRAINT IF EXISTS suggestions_unique_suggester_position;
+ALTER TABLE free_text_suggestions
+  ADD CONSTRAINT suggestions_unique_suggester_position
+  UNIQUE (cycle_id, position_id, suggester_id);
+
+-- Index: speed up "has this member already recommended this position?" check
+CREATE INDEX IF NOT EXISTS idx_recommendations_recommender_position 
+  ON recommendations(cycle_id, position_id, recommender_id);
+
+-- Index: speed up NC panel candidate lookup
+CREATE INDEX IF NOT EXISTS idx_recommendations_cycle_position 
+  ON recommendations(cycle_id, position_id);
+
+-- Index: speed up candidate recommendation count
+CREATE INDEX IF NOT EXISTS idx_recommendations_candidate 
+  ON recommendations(cycle_id, candidate_id);
+
+-- Index: speed up objection lookups
+CREATE INDEX IF NOT EXISTS idx_objections_cycle 
+  ON objections(cycle_id);
+
+-- Index: speed up nominee lookups
+CREATE INDEX IF NOT EXISTS idx_nominees_cycle_status 
+  ON nominees(cycle_id, status);
