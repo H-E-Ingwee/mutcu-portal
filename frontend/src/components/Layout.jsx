@@ -269,6 +269,7 @@ export default function Layout() {
                   <NavItem to="/admin/roles" icon={Shield} label="Role Management" />
                   <NavItem to="/admin/audit-log" icon={ClipboardList} label="Audit Log" />
                   <NavItem to="/admin/bulk-email" icon={Megaphone} label="Bulk Email" />
+                  <NavItem to="/admin/nc-data" icon={Database} label="NC Data Manager" />
                   {/* <NavItem to="/admin/engagement" icon={BarChart3} label="Member Engagement" /> */}
                   {/* <NavItem to="/admin/ai" icon={Sparkles} label="AI Assistant" /> */}
                   <NavItem to="/admin/settings" icon={Settings} label="System Settings" />
