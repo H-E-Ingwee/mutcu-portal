@@ -1,0 +1,609 @@
+// ============================================================
+// MUTCU DMS — Prisma Schema
+// Generated from existing Supabase PostgreSQL database
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_DIRECT")
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+model User {
+  id                          String    @id @default(uuid())
+  name                        String
+  email                       String    @unique
+  password                    String
+  phone                       String?
+  student_id                  String?   @unique
+  school_prefix               String?
+  gender                      String?
+  year_of_study               Int?
+  graduation_year             Int?
+  course_type                 String?   @default("degree")
+  primary_ministry            String?
+  secondary_ministry          String?
+  membership_type             String    @default("full")
+  membership_tier             String?   @default("general")
+  membership_year             Int?
+  enrollment_year             Int?
+  role                        String    @default("full_member")
+  secondary_role              String?
+  enrollment_status           String    @default("pending")
+  is_active                   Boolean   @default(true)
+  email_verified              Boolean   @default(false)
+  email_verification_token    String?
+  email_verification_sent_at  DateTime?
+  password_reset_token        String?
+  password_reset_expires      DateTime?
+  must_change_password        Boolean   @default(false)
+  is_temp_password            Boolean   @default(false)
+  profile_complete            Boolean   @default(false)
+  faith_declaration_signed    Boolean   @default(false)
+  declaration_signed_at       DateTime?
+  faith_declaration_renewed_at DateTime?
+  disciplinary_status         String?   @default("clear")
+  sgc_executive_role          Boolean?  @default(false)
+  is_finalist                 Boolean?  @default(false)
+  mutcu_number                String?   @unique
+  photo_url                   String?
+  pending_changes             Json?
+  county                      String?
+  year_completed              Int?
+  course_studied              String?
+  occupation                  String?
+  deleted_at                  DateTime?
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @updatedAt
+
+  // Relations
+  recommendations_made        Recommendation[]    @relation("Recommender")
+  recommendations_received    Recommendation[]    @relation("Candidate")
+  vetting_decisions           VettingDecision[]   @relation("VettingCandidate")
+  vetting_decisions_made      VettingDecision[]   @relation("VettingNC")
+  nominees                    Nominee[]
+  objections                  Objection[]
+  nc_memberships              NcMember[]
+  appointments                Appointment[]
+  messages                    Message[]
+  notifications               MutcuNotification[]
+  attendance_records          AttendanceRecord[]
+  event_rsvps                 EventRsvp[]
+  audit_logs_actor            AuditLog[]          @relation("AuditActor")
+  disciplinary_cases          DisciplinaryCase[]  @relation("DisciplinaryMember")
+  disciplinary_handled        DisciplinaryCase[]  @relation("DisciplinaryHandler")
+  requisitions_made           Requisition[]       @relation("RequisitionRequester")
+  requisitions_approved       Requisition[]       @relation("RequisitionApprover")
+  income_entries              IncomeEntry[]
+  free_text_suggestions       FreeTextSuggestion[]
+  by_nominations              ByNomination[]
+
+  @@index([email])
+  @@index([role])
+  @@index([secondary_role])
+  @@index([enrollment_status])
+  @@index([is_active])
+  @@index([mutcu_number])
+  @@index([student_id])
+  @@map("users")
+}
+
+// ─── Nomination Cycles ────────────────────────────────────────────────────────
+model NominationCycle {
+  id                    String    @id @default(uuid())
+  title                 String
+  spiritual_year        String
+  status                String    @default("draft")
+  prayer_start          DateTime?
+  prayer_end            DateTime?
+  nominations_open      DateTime?
+  nominations_close     DateTime?
+  vetting_start         DateTime?
+  vetting_end           DateTime?
+  objection_start       DateTime?
+  objection_close       DateTime?
+  agm_date              DateTime?
+  nc_formation_date     DateTime?
+  nc_dissolution_date   DateTime?
+  chairperson_gender    String?
+  published_at          DateTime?
+  published_by          String?
+  commissioned_at       DateTime?
+  created_by            String?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  // Relations
+  recommendations       Recommendation[]
+  vetting_decisions     VettingDecision[]
+  nominees              Nominee[]
+  objections            Objection[]
+  nc_members            NcMember[]
+  free_text_suggestions FreeTextSuggestion[]
+  by_nominations        ByNomination[]
+
+  @@index([status])
+  @@map("nomination_cycles")
+}
+
+// ─── Positions ────────────────────────────────────────────────────────────────
+model Position {
+  id                  String    @id @default(uuid())
+  title               String
+  short_title         String?
+  slug                String?   @unique
+  display_order       Int       @default(0)
+  gender_constraint   String?
+  max_terms           Int       @default(2)
+  chair_max_one_term  Boolean   @default(false)
+  is_active           Boolean   @default(true)
+  created_at          DateTime  @default(now())
+
+  // Relations
+  recommendations     Recommendation[]
+  vetting_decisions   VettingDecision[]
+  nominees            Nominee[]
+  appointments        Appointment[]
+  free_text_suggestions FreeTextSuggestion[]
+  by_nominations      ByNomination[]
+
+  @@index([is_active])
+  @@map("positions")
+}
+
+// ─── Recommendations ─────────────────────────────────────────────────────────
+model Recommendation {
+  id              String    @id @default(uuid())
+  cycle_id        String
+  position_id     String
+  candidate_id    String
+  recommender_id  String
+  prayerful_note  String?
+  created_at      DateTime  @default(now())
+
+  cycle           NominationCycle @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  position        Position        @relation(fields: [position_id], references: [id])
+  candidate       User            @relation("Candidate", fields: [candidate_id], references: [id], onDelete: Cascade)
+  recommender     User            @relation("Recommender", fields: [recommender_id], references: [id], onDelete: Cascade)
+
+  @@unique([cycle_id, position_id, recommender_id])
+  @@index([cycle_id, position_id])
+  @@index([cycle_id, candidate_id])
+  @@map("recommendations")
+}
+
+// ─── Vetting Decisions ────────────────────────────────────────────────────────
+model VettingDecision {
+  id            String    @id @default(uuid())
+  cycle_id      String
+  position_id   String
+  candidate_id  String
+  nc_member_id  String
+  decision      String
+  reason        String?
+  ai_summary    String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  cycle         NominationCycle @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  position      Position        @relation(fields: [position_id], references: [id])
+  candidate     User            @relation("VettingCandidate", fields: [candidate_id], references: [id], onDelete: Cascade)
+  nc_member     User            @relation("VettingNC", fields: [nc_member_id], references: [id])
+
+  @@unique([cycle_id, position_id, candidate_id])
+  @@index([cycle_id, position_id])
+  @@map("vetting_decisions")
+}
+
+// ─── Nominees ─────────────────────────────────────────────────────────────────
+model Nominee {
+  id            String    @id @default(uuid())
+  cycle_id      String
+  position_id   String
+  candidate_id  String
+  status        String    @default("active")
+  published_at  DateTime?
+  published_by  String?
+  created_at    DateTime  @default(now())
+
+  cycle         NominationCycle @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  position      Position        @relation(fields: [position_id], references: [id])
+  candidate     User            @relation(fields: [candidate_id], references: [id], onDelete: Cascade)
+  objections    Objection[]
+
+  @@index([cycle_id, status])
+  @@map("nominees")
+}
+
+// ─── Objections ───────────────────────────────────────────────────────────────
+model Objection {
+  id            String    @id @default(uuid())
+  cycle_id      String
+  nominee_id    String
+  objector_id   String?
+  grounds       String
+  status        String    @default("pending")
+  nc_response   String?
+  resolved_at   DateTime?
+  resolved_by   String?
+  created_at    DateTime  @default(now())
+
+  cycle         NominationCycle @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  nominee       Nominee         @relation(fields: [nominee_id], references: [id], onDelete: Cascade)
+  objector      User?           @relation(fields: [objector_id], references: [id], onDelete: SetNull)
+
+  @@index([cycle_id])
+  @@map("objections")
+}
+
+// ─── NC Members ───────────────────────────────────────────────────────────────
+model NcMember {
+  id            String    @id @default(uuid())
+  cycle_id      String
+  user_id       String
+  nc_role       String    @default("member")
+  appointed_by  String?
+  appointed_at  DateTime?
+  is_active     Boolean   @default(true)
+  created_at    DateTime  @default(now())
+
+  cycle         NominationCycle @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  user          User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([cycle_id, user_id])
+  @@index([cycle_id])
+  @@map("nc_members")
+}
+
+// ─── Free Text Suggestions ────────────────────────────────────────────────────
+model FreeTextSuggestion {
+  id              String    @id @default(uuid())
+  cycle_id        String
+  position_id     String
+  suggester_id    String?
+  suggested_name  String
+  description     String?
+  why_recommend   String?
+  nc_action       String    @default("pending")
+  nc_notes        String?
+  is_anonymous    Boolean   @default(true)
+  created_at      DateTime  @default(now())
+
+  cycle           NominationCycle @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  position        Position        @relation(fields: [position_id], references: [id])
+  suggester       User?           @relation(fields: [suggester_id], references: [id], onDelete: SetNull)
+
+  @@unique([cycle_id, position_id, suggester_id])
+  @@index([cycle_id])
+  @@map("free_text_suggestions")
+}
+
+// ─── By Nominations ───────────────────────────────────────────────────────────
+model ByNomination {
+  id            String    @id @default(uuid())
+  cycle_id      String
+  position_id   String
+  candidate_id  String
+  reason        String?
+  vacated_by    String?
+  created_by    String?
+  created_at    DateTime  @default(now())
+
+  cycle         NominationCycle @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+  position      Position        @relation(fields: [position_id], references: [id])
+  candidate     User            @relation(fields: [candidate_id], references: [id], onDelete: Cascade)
+
+  @@map("by_nominations")
+}
+
+// ─── Appointments (Leadership History) ───────────────────────────────────────
+model Appointment {
+  id              String    @id @default(uuid())
+  user_id         String
+  position_id     String
+  spiritual_year  String
+  is_current      Boolean   @default(false)
+  photo_url       String?
+  linked_member   Boolean   @default(false)
+  start_date      DateTime?
+  end_date        DateTime?
+  created_at      DateTime  @default(now())
+
+  user            User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  position        Position  @relation(fields: [position_id], references: [id])
+
+  @@index([is_current])
+  @@index([user_id])
+  @@map("appointments")
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+model Message {
+  id          String    @id @default(uuid())
+  sender_id   String?
+  subject     String
+  body        String
+  status      String    @default("unread")
+  read_by     String?
+  read_at     DateTime?
+  created_at  DateTime  @default(now())
+
+  sender      User?     @relation(fields: [sender_id], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("messages")
+}
+
+// ─── Announcements ────────────────────────────────────────────────────────────
+model Announcement {
+  id            String    @id @default(uuid())
+  title         String
+  body          String
+  is_pinned     Boolean   @default(false)
+  target_gender String?
+  posted_by     String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([is_pinned])
+  @@map("announcements")
+}
+
+// ─── Spiritual Calendar ───────────────────────────────────────────────────────
+model SpiritualCalendar {
+  id              String    @id @default(uuid())
+  title           String
+  event_date      DateTime
+  event_type      String?
+  description     String?
+  speaker         String?
+  venue           String?
+  is_published    Boolean   @default(true)
+  spiritual_year  String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  rsvps           EventRsvp[]
+
+  @@index([event_date])
+  @@map("spiritual_calendar")
+}
+
+// ─── Event RSVPs ──────────────────────────────────────────────────────────────
+model EventRsvp {
+  id          String    @id @default(uuid())
+  event_id    String
+  user_id     String
+  status      String    @default("attending")
+  created_at  DateTime  @default(now())
+
+  event       SpiritualCalendar @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
+  @@map("event_rsvps")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+model MutcuNotification {
+  id          String    @id @default(uuid())
+  user_id     String
+  title       String
+  body        String
+  type        String?
+  is_read     Boolean   @default(false)
+  link        String?
+  created_at  DateTime  @default(now())
+
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, is_read])
+  @@map("mutcu_notifications")
+}
+
+// ─── Attendance ───────────────────────────────────────────────────────────────
+model AttendanceSession {
+  id            String    @id @default(uuid())
+  title         String
+  session_date  DateTime
+  session_type  String?
+  created_by    String?
+  created_at    DateTime  @default(now())
+
+  records       AttendanceRecord[]
+
+  @@index([session_date])
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id          String    @id @default(uuid())
+  session_id  String
+  user_id     String
+  status      String    @default("present")
+  created_at  DateTime  @default(now())
+
+  session     AttendanceSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([session_id, user_id])
+  @@map("attendance_records")
+}
+
+// ─── Disciplinary ─────────────────────────────────────────────────────────────
+model DisciplinaryCase {
+  id              String    @id @default(uuid())
+  member_id       String
+  handler_id      String?
+  offense         String
+  severity        String    @default("minor")
+  status          String    @default("open")
+  outcome         String?
+  proceedings     String?
+  evidence_url    String?
+  opened_at       DateTime  @default(now())
+  resolved_at     DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  member          User      @relation("DisciplinaryMember", fields: [member_id], references: [id], onDelete: Cascade)
+  handler         User?     @relation("DisciplinaryHandler", fields: [handler_id], references: [id], onDelete: SetNull)
+
+  @@index([member_id])
+  @@index([status])
+  @@map("disciplinary_cases")
+}
+
+// ─── Requisitions ─────────────────────────────────────────────────────────────
+model Requisition {
+  id              String    @id @default(uuid())
+  title           String
+  ministry        String?
+  requested_by    String
+  approved_by     String?
+  status          String    @default("pending")
+  items           Json?
+  total_requested Decimal?  @db.Decimal(12, 2)
+  total_approved  Decimal?  @db.Decimal(12, 2)
+  total_disbursed Decimal?  @db.Decimal(12, 2)
+  notes           String?
+  chair_signature Boolean   @default(false)
+  treasurer_signature Boolean @default(false)
+  disbursed_at    DateTime?
+  financial_year  String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  requester       User      @relation("RequisitionRequester", fields: [requested_by], references: [id])
+  approver        User?     @relation("RequisitionApprover", fields: [approved_by], references: [id], onDelete: SetNull)
+  comments        RequisitionComment[]
+
+  @@index([status])
+  @@index([ministry])
+  @@map("requisitions")
+}
+
+model RequisitionComment {
+  id              String    @id @default(uuid())
+  requisition_id  String
+  author_id       String?
+  author_name     String?
+  author_role     String?
+  comment         String
+  created_at      DateTime  @default(now())
+
+  requisition     Requisition @relation(fields: [requisition_id], references: [id], onDelete: Cascade)
+
+  @@index([requisition_id])
+  @@map("requisition_comments")
+}
+
+// ─── Treasury ─────────────────────────────────────────────────────────────────
+model FinancialYear {
+  id              String    @id @default(uuid())
+  label           String    @unique
+  start_date      DateTime
+  end_date        DateTime
+  is_active       Boolean   @default(false)
+  is_closed       Boolean   @default(false)
+  managed_by      String?
+  created_at      DateTime  @default(now())
+
+  budget_items    BudgetItem[]
+  income_entries  IncomeEntry[]
+
+  @@map("financial_years")
+}
+
+model BudgetItem {
+  id              String    @id @default(uuid())
+  financial_year_id String
+  ministry        String
+  category        String
+  description     String
+  budgeted_amount Decimal   @db.Decimal(12, 2)
+  spent_amount    Decimal   @default(0) @db.Decimal(12, 2)
+  notes           String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  financial_year  FinancialYear @relation(fields: [financial_year_id], references: [id], onDelete: Cascade)
+
+  @@index([financial_year_id])
+  @@index([ministry])
+  @@map("budget_items")
+}
+
+model IncomeEntry {
+  id              String    @id @default(uuid())
+  financial_year_id String?
+  source          String
+  amount          Decimal   @db.Decimal(12, 2)
+  description     String?
+  received_date   DateTime
+  recorded_by     String?
+  created_at      DateTime  @default(now())
+
+  financial_year  FinancialYear? @relation(fields: [financial_year_id], references: [id])
+  recorder        User?          @relation(fields: [recorded_by], references: [id], onDelete: SetNull)
+
+  @@index([financial_year_id])
+  @@map("income_entries")
+}
+
+// ─── Audit Logs ───────────────────────────────────────────────────────────────
+model AuditLog {
+  id            String    @id @default(uuid())
+  actor_id      String?
+  action        String
+  entity_type   String?
+  entity_id     String?
+  description   String?
+  metadata      Json?     @default("{}")
+  created_at    DateTime  @default(now())
+
+  actor         User?     @relation("AuditActor", fields: [actor_id], references: [id], onDelete: SetNull)
+
+  @@index([actor_id])
+  @@index([action])
+  @@index([created_at(sort: Desc)])
+  @@map("audit_logs")
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+model Setting {
+  key         String    @id
+  value       String
+  updated_at  DateTime  @updatedAt
+
+  @@map("settings")
+}
+
+// ─── MUTCU Counters (atomic number generation) ────────────────────────────────
+model MutcuCounter {
+  key         String    @id
+  value       Int       @default(0)
+  updated_at  DateTime  @updatedAt
+
+  @@map("mutcu_counters")
+}
+
+// ─── Ministry Content ─────────────────────────────────────────────────────────
+model MinistryContent {
+  id          String    @id @default(uuid())
+  ministry    String
+  title       String
+  body        String
+  posted_by   String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  @@index([ministry])
+  @@map("ministry_content")
+}

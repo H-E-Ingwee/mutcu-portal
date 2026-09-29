@@ -89,8 +89,8 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`MUTCU DMS API v2.1 running on port ${PORT}`)
   // Ping DB on startup to warm up connection
-  const { pingDatabase } = require('./lib/supabase')
-  pingDatabase()
+  const { pingPrisma } = require('./lib/prisma')
+  pingPrisma()
   // Verify Brevo SMTP connection on startup
   const { verifyConnection } = require('./lib/email')
   verifyConnection()

@@ -6,11 +6,16 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "build": "npm install --legacy-peer-deps",
+    "build": "npm install --legacy-peer-deps && npx prisma generate",
     "migrate": "node src/db/migrate.js",
-    "seed": "node src/db/seed.js"
+    "seed": "node src/db/seed.js",
+    "postinstall": "prisma skills sync || exit 0",
+    "prisma:generate": "npx prisma generate",
+    "prisma:pull": "npx prisma db pull",
+    "prisma:push": "npx prisma db push"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "2.45.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
@@ -24,6 +29,7 @@
     "multer": "^2.4.0",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^6.9.14",
+    "prisma": "^5.22.0",
     "uuid": "^10.0.0",
     "xlsx": "^0.18.5"
   },
@@ -32,5 +38,10 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true
   }
 }

@@ -1,116 +1,110 @@
-const express = require('express');
-const router = express.Router();
-const supabase = require('../lib/supabase');
-const { withTimeout } = require('../lib/supabase');
+const express = require('express')
+const router = express.Router()
+const prisma = require('../lib/prisma')
+const { authenticate, requireApproved, requireRole } = require('../middleware/auth')
+const { checkEligibility, canNominate, isFinalist, isFirstYear } = require('../lib/eligibility')
 
-// ─── Concurrency limiter for nominations ──────────────────────────────────────
-// Prevents race conditions and DB overload during mass nomination events
+// ─── Concurrency limiter ──────────────────────────────────────────────────────
 let activeNominations = 0
 const MAX_CONCURRENT_NOMINATIONS = 20
-const { authenticate, requireApproved, requireRole } = require('../middleware/auth');
-const { checkEligibility, canNominate, isFinalist, isFirstYear } = require('../lib/eligibility');
 
-// GET /api/nominations/cycle — get active cycle
+// ─── GET /api/nominations/cycle ───────────────────────────────────────────────
 router.get('/cycle', authenticate, async (req, res) => {
   try {
-    const { data } = await supabase.from('nomination_cycles')
-      .select('*')
-      .not('status', 'in', '("draft","commissioned","cancelled")')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    res.json({ cycle: data || null });
+    const cycle = await prisma.nominationCycle.findFirst({
+      where: { status: { notIn: ['draft', 'commissioned', 'cancelled'] } },
+      orderBy: { created_at: 'desc' },
+    })
+    res.json({ cycle: cycle || null })
   } catch (err) {
-    res.json({ cycle: null });
+    res.json({ cycle: null })
   }
-});
+})
 
-// GET /api/nominations/eligible/:positionId — eligible members for a position
-// Optimized: pre-filter in DB, then check eligibility in memory (no per-member DB calls for basic checks)
+// ─── GET /api/nominations/eligible/:positionId ────────────────────────────────
 router.get('/eligible/:positionId', authenticate, requireApproved, async (req, res) => {
   try {
-    const { search } = req.query;
-    const { data: position } = await supabase.from('positions').select('*').eq('id', req.params.positionId).single();
-    if (!position) return res.status(404).json({ error: 'Position not found' });
+    const { search } = req.query
+    const [position, cycle] = await Promise.all([
+      prisma.position.findUnique({ where: { id: req.params.positionId } }),
+      prisma.nominationCycle.findFirst({
+        where: { status: { notIn: ['draft', 'commissioned', 'cancelled'] } },
+        orderBy: { created_at: 'desc' },
+        select: { id: true, chairperson_gender: true }
+      })
+    ])
 
-    // Get active cycle for gender constraint resolution
-    const { data: cycle } = await supabase.from('nomination_cycles')
-      .select('id,chairperson_gender')
-      .not('status', 'in', '("draft","commissioned","cancelled")')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    if (!position) return res.status(404).json({ error: 'Position not found' })
 
-    // Pre-filter in DB: only active full members who are not first-year
-    // This dramatically reduces the number of members we need to check
-    let query = supabase.from('users')
-      .select('id,name,photo_url,year_of_study,gender,primary_ministry,secondary_ministry,mutcu_number,membership_type,is_finalist,disciplinary_status,sgc_executive_role,faith_declaration_signed,course_type,school_prefix')
-      .eq('enrollment_status', 'active')
-      .eq('membership_type', 'full')
-      .eq('disciplinary_status', 'clear')
-      .eq('sgc_executive_role', false)
-      .eq('faith_declaration_signed', true)
-      .gte('year_of_study', 2); // Not first year
-
-    // Apply gender constraint pre-filter if known
-    let requiredGender = position.gender_constraint;
+    // Determine gender constraint
+    let requiredGender = position.gender_constraint
     if (!requiredGender && cycle?.chairperson_gender) {
-      const slug = (position.slug || '').toLowerCase();
+      const slug = (position.slug || '').toLowerCase()
       if (slug.includes('1st') || slug.includes('first')) {
-        requiredGender = cycle.chairperson_gender === 'male' ? 'female' : 'male';
+        requiredGender = cycle.chairperson_gender === 'male' ? 'female' : 'male'
       } else if (slug.includes('2nd') || slug.includes('second')) {
-        requiredGender = cycle.chairperson_gender === 'male' ? 'male' : 'female';
+        requiredGender = cycle.chairperson_gender === 'male' ? 'male' : 'female'
       }
     }
-    if (requiredGender) query = query.eq('gender', requiredGender);
 
-    // Apply search filter in DB
-    if (search && search.trim()) {
-      query = query.or(`name.ilike.%${search}%,primary_ministry.ilike.%${search}%,mutcu_number.ilike.%${search}%`);
+    // Build Prisma where clause
+    const where = {
+      enrollment_status: 'active',
+      membership_type: 'full',
+      disciplinary_status: 'clear',
+      sgc_executive_role: false,
+      faith_declaration_signed: true,
+      year_of_study: { gte: 2 },
+      ...(requiredGender ? { gender: requiredGender } : {}),
+      ...(search?.trim() ? {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { primary_ministry: { contains: search, mode: 'insensitive' } },
+          { mutcu_number: { contains: search, mode: 'insensitive' } },
+        ]
+      } : {}),
     }
 
-    const { data: members } = await query.order('name', { ascending: true });
+    const members = await prisma.user.findMany({
+      where,
+      select: {
+        id: true, name: true, photo_url: true, year_of_study: true,
+        course_type: true, gender: true, primary_ministry: true,
+        secondary_ministry: true, mutcu_number: true, school_prefix: true,
+        is_finalist: true,
+        appointments: { where: { position_id: position.id }, select: { id: true } }
+      },
+      orderBy: { name: 'asc' }
+    })
 
-    // Now check term limits (requires DB call per member — only for remaining candidates)
-    const maxTerms = position.chair_max_one_term ? 1 : (position.max_terms || 2);
-    const eligible = [];
+    const maxTerms = position.chair_max_one_term ? 1 : (position.max_terms || 2)
 
-    for (const member of members || []) {
-      // Skip finalists
-      const courseType = member.course_type || 'degree';
-      const prefix = (member.school_prefix || '').toUpperCase();
-      const maxYear = courseType === 'diploma' ? 3 : (prefix === 'SE' ? 5 : 4);
-      if ((member.year_of_study || 0) >= maxYear || member.is_finalist) continue;
+    const eligible = members
+      .filter(m => {
+        const courseType = m.course_type || 'degree'
+        const prefix = (m.school_prefix || '').toUpperCase()
+        const maxYear = courseType === 'diploma' ? 3 : (prefix === 'SE' ? 5 : 4)
+        if ((m.year_of_study || 0) >= maxYear || m.is_finalist) return false
+        if ((m.appointments?.length || 0) >= maxTerms) return false
+        return true
+      })
+      .map(m => ({
+        id: m.id, name: m.name,
+        photo: m.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name)}&background=04003D&color=FF9700&size=200&bold=true`,
+        year_of_study: m.year_of_study, course_type: m.course_type,
+        gender: m.gender, ministry: m.primary_ministry || 'General Member',
+        secondary_ministry: m.secondary_ministry, mutcu_number: m.mutcu_number,
+      }))
 
-      // Check term limit (DB call — but only for pre-filtered candidates)
-      const { count } = await supabase.from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('position_id', position.id)
-        .eq('user_id', member.id);
-      if ((count || 0) >= maxTerms) continue;
-
-      eligible.push({
-        id: member.id,
-        name: member.name,
-        photo: member.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=04003D&color=FF9700&size=200&bold=true`,
-        year_of_study: member.year_of_study,
-        course_type: member.course_type,
-        gender: member.gender,
-        ministry: member.primary_ministry || 'General Member',
-        secondary_ministry: member.secondary_ministry,
-        mutcu_number: member.mutcu_number,
-      });
-    }
-
-    res.json({ members: eligible, total: eligible.length });
+    res.json({ members: eligible, total: eligible.length })
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[ELIGIBLE ERROR]', err.message)
+    res.status(500).json({ error: err.message })
   }
-});
+})
 
-// POST /api/nominations/recommend — submit prayerful recommendation
+// ─── POST /api/nominations/recommend ─────────────────────────────────────────
 router.post('/recommend', authenticate, requireApproved, async (req, res) => {
-  // Throttle concurrent nominations to prevent race conditions
   if (activeNominations >= MAX_CONCURRENT_NOMINATIONS) {
     return res.status(429).json({
       error: 'The system is processing many nominations right now. Please wait a moment and try again — your nomination will not be lost.',
@@ -121,269 +115,203 @@ router.post('/recommend', authenticate, requireApproved, async (req, res) => {
 
   activeNominations++
   try {
-    const { cycle_id, position_id, candidate_id, prayerful_note } = req.body;
-    const user = req.user;
+    const { cycle_id, position_id, candidate_id, prayerful_note } = req.body
+    const user = req.user
 
-    // Check if user can nominate (constitutional check)
-    const nominateCheck = canNominate(user);
-    if (!nominateCheck.allowed) {
-      return res.status(403).json({ error: nominateCheck.reason });
-    }
+    const nominateCheck = canNominate(user)
+    if (!nominateCheck.allowed) return res.status(403).json({ error: nominateCheck.reason })
 
-    // Check duplicate — one recommendation per recommender per position (Art. 17.2.iii)
-    // Use withTimeout to prevent hanging under load
-    const { data: existing } = await withTimeout(
-      supabase.from('recommendations')
-        .select('id').eq('cycle_id', cycle_id).eq('position_id', position_id).eq('recommender_id', user.id).single(),
-      5000, 'duplicate nomination check'
-    )
-    if (existing) {
-      return res.status(400).json({ error: 'You have already submitted a prayerful recommendation for this position. Only one recommendation per position is allowed.' });
-    }
-
-    // Validate candidate + cycle in one combined query (saves a round trip)
-    const [candidateRes, cycleRes] = await Promise.all([
-      withTimeout(
-        supabase.from('users')
-          .select('id,name,year_of_study,gender,primary_ministry,mutcu_number,membership_type,is_finalist,disciplinary_status,sgc_executive_role,faith_declaration_signed,course_type,school_prefix')
-          .eq('id', candidate_id).single(),
-        5000, 'candidate lookup'
-      ),
-      withTimeout(
-        supabase.from('nomination_cycles').select('status').eq('id', cycle_id).single(),
-        5000, 'cycle status check'
-      )
+    // Parallel: check duplicate + validate candidate + check cycle status
+    const [existing, candidate, cycle] = await Promise.all([
+      prisma.recommendation.findUnique({
+        where: { cycle_id_position_id_recommender_id: { cycle_id, position_id, recommender_id: user.id } },
+        select: { id: true }
+      }),
+      prisma.user.findUnique({
+        where: { id: candidate_id },
+        select: { id: true, name: true, year_of_study: true, gender: true, primary_ministry: true,
+          mutcu_number: true, membership_type: true, is_finalist: true, disciplinary_status: true,
+          sgc_executive_role: true, faith_declaration_signed: true, course_type: true, school_prefix: true }
+      }),
+      prisma.nominationCycle.findUnique({
+        where: { id: cycle_id },
+        select: { status: true }
+      })
     ])
 
-    const candidate = candidateRes.data
-    const cycle = cycleRes.data
+    if (existing) return res.status(400).json({ error: 'You have already submitted a prayerful recommendation for this position. Only one recommendation per position is allowed.' })
+    if (!candidate) return res.status(404).json({ error: 'Candidate not found' })
+    if (!cycle || cycle.status !== 'nominations_open') return res.status(400).json({ error: 'Nominations are not currently open.' })
+    if (isFirstYear(candidate)) return res.status(400).json({ error: 'First-year students cannot be nominated for EC positions (Art. 12.4.b)' })
+    if (isFinalist(candidate)) return res.status(400).json({ error: 'Finalist students cannot be nominated for EC positions — they serve in the Nomination College (Art. 12.4.b)' })
 
-    if (!candidate) return res.status(404).json({ error: 'Candidate not found' });
-    if (!cycle || cycle.status !== 'nominations_open') {
-      return res.status(400).json({ error: 'Nominations are not currently open.' });
-    }
+    const recommendation = await prisma.recommendation.create({
+      data: { cycle_id, position_id, candidate_id, recommender_id: user.id, prayerful_note: prayerful_note || null }
+    })
 
-    // First-years cannot be nominated
-    if (isFirstYear(candidate)) {
-      return res.status(400).json({ error: 'First-year students cannot be nominated for EC positions (Art. 12.4.b)' });
-    }
-
-    // Finalists cannot be nominated (they serve in NC)
-    if (isFinalist(candidate)) {
-      return res.status(400).json({ error: 'Finalist students cannot be nominated for EC positions — they serve in the Nomination College (Art. 12.4.b)' });
-    }
-
-    const { data, error } = await withTimeout(
-      supabase.from('recommendations').insert({
-        cycle_id, position_id, candidate_id,
-        recommender_id: user.id,
-        prayerful_note: prayerful_note || null,
-      }).select().single(),
-      6000, 'recommendation insert'
-    )
-
-    // Handle unique constraint violation (race condition — two simultaneous submits)
-    if (error) {
-      if (error.code === '23505') {
-        return res.status(400).json({ error: 'You have already submitted a recommendation for this position.' })
-      }
-      throw error
-    }
-
-    res.status(201).json({ recommendation: data, message: 'Prayerful recommendation submitted successfully' });
+    res.status(201).json({ recommendation, message: 'Prayerful recommendation submitted successfully' })
   } catch (err) {
     console.error('[RECOMMEND ERROR]', err.message)
-    if (err.message?.includes('timed out')) {
-      return res.status(503).json({
-        error: 'The server is under heavy load. Please wait a few seconds and try again.',
-        code: 'SERVER_BUSY',
-      })
-    }
-    res.status(500).json({ error: err.message });
+    if (err.code === 'P2002') return res.status(400).json({ error: 'You have already submitted a recommendation for this position.' })
+    if (err.code === 'P1008') return res.status(503).json({ error: 'Server is under heavy load. Please try again in a moment.', code: 'SERVER_BUSY' })
+    res.status(500).json({ error: err.message })
   } finally {
     activeNominations--
   }
-});
+})
 
-// POST /api/nominations/suggest — anonymous free-text suggestion
+// ─── POST /api/nominations/suggest ───────────────────────────────────────────
 router.post('/suggest', authenticate, requireApproved, async (req, res) => {
   try {
-    const { cycle_id, position_id, suggested_name, description, why_recommend } = req.body;
-    const user = req.user;
+    const { cycle_id, position_id, suggested_name, description, why_recommend } = req.body
+    const user = req.user
 
-    // Check if user can nominate
-    const nominateCheck = canNominate(user);
-    if (!nominateCheck.allowed) {
-      return res.status(403).json({ error: nominateCheck.reason });
-    }
+    const nominateCheck = canNominate(user)
+    if (!nominateCheck.allowed) return res.status(403).json({ error: nominateCheck.reason })
 
-    // Check duplicate — one suggestion per suggester per position
-    const { data: existing } = await withTimeout(
-      supabase.from('free_text_suggestions')
-        .select('id').eq('cycle_id', cycle_id).eq('position_id', position_id).eq('suggester_id', user.id).single(),
-      5000, 'duplicate suggestion check'
-    )
-    if (existing) {
-      return res.status(400).json({ error: 'You have already submitted a suggestion for this position. Only one suggestion per position is allowed.' });
-    }
+    const existing = await prisma.freeTextSuggestion.findUnique({
+      where: { cycle_id_position_id_suggester_id: { cycle_id, position_id, suggester_id: user.id } },
+      select: { id: true }
+    })
+    if (existing) return res.status(400).json({ error: 'You have already submitted a suggestion for this position.' })
 
-    const { data, error } = await withTimeout(
-      supabase.from('free_text_suggestions').insert({
-        cycle_id, position_id,
-        suggester_id: user.id,
-        suggested_name, description, why_recommend,
-        nc_action: 'pending',
-        is_anonymous: true,
-      }).select().single(),
-      6000, 'suggestion insert'
-    )
+    const suggestion = await prisma.freeTextSuggestion.create({
+      data: { cycle_id, position_id, suggester_id: user.id, suggested_name, description, why_recommend, nc_action: 'pending', is_anonymous: true }
+    })
 
-    if (error) {
-      if (error.code === '23505') {
-        return res.status(400).json({ error: 'You have already submitted a suggestion for this position.' })
-      }
-      throw error
-    }
-    res.status(201).json({ suggestion: data, message: 'Your suggestion has been submitted anonymously to the Nomination College' });
+    res.status(201).json({ suggestion, message: 'Your suggestion has been submitted anonymously to the Nomination College' })
   } catch (err) {
-    console.error('[SUGGEST ERROR]', err.message)
-    if (err.message?.includes('timed out')) {
-      return res.status(503).json({ error: 'Server is busy. Please try again in a moment.', code: 'SERVER_BUSY' })
-    }
-    res.status(500).json({ error: err.message });
+    if (err.code === 'P2002') return res.status(400).json({ error: 'You have already submitted a suggestion for this position.' })
+    res.status(500).json({ error: err.message })
   }
-});
+})
 
-// GET /api/nominations/nominees — published nominees
+// ─── GET /api/nominations/nominees ───────────────────────────────────────────
 router.get('/nominees', authenticate, async (req, res) => {
   try {
-    const { data: cycle } = await supabase.from('nomination_cycles')
-      .select('*').not('status', 'in', '("draft","commissioned","cancelled")').order('created_at', { ascending: false }).limit(1).single();
+    const cycle = await prisma.nominationCycle.findFirst({
+      where: { status: { notIn: ['draft', 'commissioned', 'cancelled'] } },
+      orderBy: { created_at: 'desc' }
+    })
 
     if (!cycle || !['nominees_published', 'objection_period', 'pre_agm', 'commissioned'].includes(cycle.status)) {
-      return res.json({ nominees: [], cycle: cycle || null, published: false });
+      return res.json({ nominees: [], cycle: cycle || null, published: false })
     }
 
-    const { data: nominees } = await supabase.from('nominees')
-      .select('*, candidate:candidate_id(id,name,photo_url,year_of_study,primary_ministry,gender,course_type), position:position_id(id,title,display_order)')
-      .eq('cycle_id', cycle.id)
-      .eq('status', 'active')
-      .order('position_id');
+    const nominees = await prisma.nominee.findMany({
+      where: { cycle_id: cycle.id, status: 'active' },
+      include: {
+        candidate: { select: { id: true, name: true, photo_url: true, year_of_study: true, primary_ministry: true, gender: true, course_type: true } },
+        position: { select: { id: true, title: true, display_order: true } }
+      },
+      orderBy: { position_id: 'asc' }
+    })
 
-    res.json({ nominees: nominees || [], cycle, published: true });
+    res.json({ nominees, cycle, published: true })
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message })
   }
-});
+})
 
-// GET /api/nominations/my-recommendations — includes both recommendations and suggestions
+// ─── GET /api/nominations/my-recommendations ──────────────────────────────────
 router.get('/my-recommendations', authenticate, async (req, res) => {
   try {
-    const { data: cycle } = await supabase.from('nomination_cycles')
-      .select('id').not('status', 'in', '("draft","commissioned","cancelled")').order('created_at', { ascending: false }).limit(1).single();
-    if (!cycle) return res.json({ recommendations: [], suggestions: [], recommended_positions: [], suggested_positions: [] });
+    const cycle = await prisma.nominationCycle.findFirst({
+      where: { status: { notIn: ['draft', 'commissioned', 'cancelled'] } },
+      orderBy: { created_at: 'desc' },
+      select: { id: true }
+    })
+    if (!cycle) return res.json({ recommendations: [], suggestions: [], recommended_positions: [], suggested_positions: [] })
 
-    const [recsRes, suggsRes] = await Promise.all([
-      supabase.from('recommendations')
-        .select('*, position:position_id(id,title), candidate:candidate_id(name,photo_url,mutcu_number)')
-        .eq('cycle_id', cycle.id)
-        .eq('recommender_id', req.user.id),
-      supabase.from('free_text_suggestions')
-        .select('*, position:position_id(id,title)')
-        .eq('cycle_id', cycle.id)
-        .eq('suggester_id', req.user.id),
-    ]);
+    const [recommendations, suggestions] = await Promise.all([
+      prisma.recommendation.findMany({
+        where: { cycle_id: cycle.id, recommender_id: req.user.id },
+        include: {
+          position: { select: { id: true, title: true } },
+          candidate: { select: { name: true, photo_url: true, mutcu_number: true } }
+        }
+      }),
+      prisma.freeTextSuggestion.findMany({
+        where: { cycle_id: cycle.id, suggester_id: req.user.id },
+        include: { position: { select: { id: true, title: true } } }
+      })
+    ])
 
-    const recommendations = recsRes.data || [];
-    const suggestions = suggsRes.data || [];
-
-    // Position IDs where user has already acted (either recommended or suggested)
-    const recommended_positions = recommendations.map(r => r.position_id);
-    const suggested_positions = suggestions.map(s => s.position_id);
-
-    res.json({ recommendations, suggestions, recommended_positions, suggested_positions });
+    res.json({
+      recommendations,
+      suggestions,
+      recommended_positions: recommendations.map(r => r.position_id),
+      suggested_positions: suggestions.map(s => s.position_id),
+    })
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message })
   }
-});
+})
 
-// POST /api/nominations/objections — submit objection
+// ─── POST /api/nominations/objections ────────────────────────────────────────
 router.post('/objections', authenticate, requireApproved, async (req, res) => {
   try {
-    const { nominee_id, grounds } = req.body;
-    const user = req.user;
+    const { nominee_id, grounds } = req.body
+    const user = req.user
 
-    // Only full members can object (not first-years per Art. 8.3.I.b)
-    if (user.membership_type !== 'full') {
-      return res.status(403).json({ error: 'Only full members may submit objections' });
-    }
-    if (isFirstYear(user)) {
-      return res.status(403).json({ error: 'First-year students cannot participate in the objection process' });
-    }
-    if (!grounds || grounds.length < 50) {
-      return res.status(400).json({ error: 'Grounds must be at least 50 characters and must be substantive' });
-    }
+    if (user.membership_type !== 'full') return res.status(403).json({ error: 'Only full members may submit objections' })
+    if (isFirstYear(user)) return res.status(403).json({ error: 'First-year students cannot participate in the objection process' })
+    if (!grounds || grounds.length < 50) return res.status(400).json({ error: 'Grounds must be at least 50 characters and must be substantive' })
 
-    const { data: nominee } = await supabase.from('nominees').select('cycle_id').eq('id', nominee_id).single();
-    if (!nominee) return res.status(404).json({ error: 'Nominee not found' });
+    const nominee = await prisma.nominee.findUnique({
+      where: { id: nominee_id },
+      select: { cycle_id: true }
+    })
+    if (!nominee) return res.status(404).json({ error: 'Nominee not found' })
 
-    const { data, error } = await withTimeout(
-      supabase.from('objections').insert({
-        cycle_id: nominee.cycle_id,
-        nominee_id,
-        objector_id: user.id,
-        grounds,
-      }).select().single(),
-      6000, 'objection insert'
-    )
+    const objection = await prisma.objection.create({
+      data: { cycle_id: nominee.cycle_id, nominee_id, objector_id: user.id, grounds }
+    })
 
-    if (error) {
-      if (error.code === '23505') {
-        return res.status(400).json({ error: 'You have already submitted an objection for this nominee.' })
-      }
-      throw error
-    }
-    res.status(201).json({ objection: data, message: 'Objection submitted to the Nomination College' });
+    res.status(201).json({ objection, message: 'Objection submitted to the Nomination College' })
   } catch (err) {
-    console.error('[OBJECTION ERROR]', err.message)
-    if (err.message?.includes('timed out')) {
-      return res.status(503).json({ error: 'Server is busy. Please try again in a moment.', code: 'SERVER_BUSY' })
-    }
-    res.status(500).json({ error: err.message });
+    if (err.code === 'P2002') return res.status(400).json({ error: 'You have already submitted an objection for this nominee.' })
+    res.status(500).json({ error: err.message })
   }
-});
+})
 
-// DELETE /api/nominations/data/:cycleId — delete nomination data (NC Chair, super_admin)
+// ─── DELETE /api/nominations/data/:cycleId ────────────────────────────────────
 router.delete('/data/:cycleId', authenticate, requireRole('super_admin', 'nc_chair'), async (req, res) => {
   try {
-    const { cycleId } = req.params;
-    const { data: cycle } = await supabase.from('nomination_cycles').select('status,agm_date').eq('id', cycleId).single();
-    if (!cycle) return res.status(404).json({ error: 'Cycle not found' });
+    const { cycleId } = req.params
+    const cycle = await prisma.nominationCycle.findUnique({
+      where: { id: cycleId },
+      select: { status: true }
+    })
+    if (!cycle) return res.status(404).json({ error: 'Cycle not found' })
     if (!['commissioned', 'cancelled'].includes(cycle.status)) {
-      return res.status(400).json({ error: 'Can only delete data from commissioned or cancelled cycles' });
+      return res.status(400).json({ error: 'Can only delete data from commissioned or cancelled cycles' })
     }
 
-    // Delete in order (foreign key constraints)
-    await supabase.from('objections').delete().eq('cycle_id', cycleId);
-    await supabase.from('nominees').delete().eq('cycle_id', cycleId);
-    await supabase.from('vetting_decisions').delete().eq('cycle_id', cycleId);
-    await supabase.from('free_text_suggestions').delete().eq('cycle_id', cycleId);
-    await supabase.from('recommendations').delete().eq('cycle_id', cycleId);
-    await supabase.from('nc_members').delete().eq('cycle_id', cycleId);
+    // Prisma transaction — all or nothing
+    await prisma.$transaction([
+      prisma.objection.deleteMany({ where: { cycle_id: cycleId } }),
+      prisma.nominee.deleteMany({ where: { cycle_id: cycleId } }),
+      prisma.vettingDecision.deleteMany({ where: { cycle_id: cycleId } }),
+      prisma.freeTextSuggestion.deleteMany({ where: { cycle_id: cycleId } }),
+      prisma.recommendation.deleteMany({ where: { cycle_id: cycleId } }),
+      prisma.ncMember.deleteMany({ where: { cycle_id: cycleId } }),
+    ])
 
-    // Audit log
-    await supabase.from('audit_logs').insert({
-      actor_id: req.user.id,
-      action: 'nominations.data_deleted',
-      entity_type: 'nomination_cycle',
-      entity_id: cycleId,
-      description: `Nomination data deleted for cycle ${cycleId} by ${req.user.name}`,
-    }).then(() => {}).catch(() => {});
+    await prisma.auditLog.create({
+      data: {
+        actor_id: req.user.id,
+        action: 'nominations.data_deleted',
+        entity_type: 'nomination_cycle',
+        entity_id: cycleId,
+        description: `Nomination data deleted for cycle ${cycleId} by ${req.user.name}`,
+      }
+    })
 
-    res.json({ message: 'Nomination data deleted successfully' });
+    res.json({ message: 'Nomination data deleted successfully' })
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message })
   }
-});
+})
 
-module.exports = router;
+module.exports = router
