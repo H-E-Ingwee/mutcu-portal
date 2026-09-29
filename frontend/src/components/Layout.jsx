@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
   MessageSquare, ClipboardList, Megaphone, History, Send, X,
-  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp, Heart, Sparkles
+  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp, Heart, Sparkles, Database
 } from 'lucide-react'
 
 function PendingLock() {
