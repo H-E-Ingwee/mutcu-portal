@@ -17,7 +17,8 @@ router.get('/cycle', authenticate, async (req, res) => {
     })
     res.json({ cycle: cycle || null })
   } catch (err) {
-    res.json({ cycle: null })
+    console.error('[NOMINATIONS/CYCLE ERROR]', err.message)
+    res.json({ cycle: null, _error: err.message })
   }
 })
 

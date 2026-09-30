@@ -6,11 +6,13 @@ const { checkEligibility } = require('../lib/eligibility');
 
 // NC action roles: NC Chairperson and Secretary can act; others view only
 // EC Admin and Super Admin can always act
-const NC_VIEW_ROLES = ['nc_member', 'nc_chair', 'nc_secretary', 'ec_admin', 'super_admin'];
+const NC_VIEW_ROLES = ['nc_member', 'nc_chair', 'nc_secretary', 'ec_admin', 'super_admin', '2nd_vp', '1st_vp', 'cu_treasurer', 'vice_secretary'];
 const NC_ACTION_ROLES = ['nc_chair', 'nc_secretary', 'ec_admin', 'super_admin'];
 
 function canAct(user) {
-  return NC_ACTION_ROLES.includes(user.role);
+  // Check both primary role and secondary_role (dual roles support)
+  return NC_ACTION_ROLES.includes(user.role) || 
+    (user.secondary_role && NC_ACTION_ROLES.includes(user.secondary_role))
 }
 
 // GET /api/nc/dashboard

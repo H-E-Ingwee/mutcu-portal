@@ -157,16 +157,31 @@ export default function Nominations() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
 
   if (!cycle || cycle.status !== 'nominations_open') {
+    const statusMessages = {
+      draft: { title: 'Nominations Not Yet Open', msg: 'The nomination cycle has not started yet. Please check back later.' },
+      prayer_period: { title: 'Prayer Period', msg: "We are currently in the prayer period. Nominations will open soon. Please pray for God's guidance." },
+      vetting: { title: 'Nominations Closed', msg: 'The nomination period has ended. The Nomination College is currently vetting candidates.' },
+      nominees_published: { title: 'Nominees Published', msg: 'Nominations are closed. You can view the published nominees.' },
+      objection_period: { title: 'Objection Period', msg: 'Nominations are closed. The objection period is currently open.' },
+      pre_agm: { title: 'Pre-AGM Stage', msg: 'Nominations are closed. The final nominee list is being prepared for the AGM.' },
+      commissioned: { title: 'Cycle Complete', msg: 'This nomination cycle has been completed and the new EC has been commissioned.' },
+      cancelled: { title: 'Cycle Cancelled', msg: 'This nomination cycle was cancelled.' },
+    }
+    const info = statusMessages[cycle?.status] || { title: 'Nominations Not Open', msg: cycle ? `Current status: ${cycle.status?.replace(/_/g, ' ')}` : 'No active nomination cycle at this time.' }
     return (
       <div className="max-w-lg mx-auto mt-12 text-center">
         <div className="card p-8">
           <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <MessageSquare size={24} className="text-gray-400" />
           </div>
-          <h2 className="font-montserrat font-bold text-navy text-lg mb-2">Nominations Not Open</h2>
-          <p className="text-gray-500 text-sm">
-            {cycle ? `Current status: ${cycle.status?.replace(/_/g, ' ')}` : 'No active nomination cycle at this time.'}
-          </p>
+          <h2 className="font-montserrat font-bold text-navy text-lg mb-2">{info.title}</h2>
+          <p className="text-gray-500 text-sm">{info.msg}</p>
+          {cycle?.status === 'nominees_published' && (
+            <a href="/nominations/nominees" className="btn-primary mt-4 inline-flex">View Nominees</a>
+          )}
+          {cycle?.status === 'objection_period' && (
+            <a href="/nominations/nominees" className="btn-primary mt-4 inline-flex">View Nominees & Object</a>
+          )}
         </div>
       </div>
     )
