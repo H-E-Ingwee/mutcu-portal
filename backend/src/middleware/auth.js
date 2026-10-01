@@ -16,10 +16,12 @@ async function authenticate(req, res, next) {
       return res.status(401).json({ error: 'Invalid token: ' + jwtErr.message })
     }
 
-    // Prisma findUnique — uses connection pool efficiently
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-    })
+    // Prisma findUnique with timeout — prevents hanging connections
+    const userPromise = prisma.user.findUnique({ where: { id: decoded.id } })
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('DB timeout')), 8000)
+    )
+    const user = await Promise.race([userPromise, timeoutPromise])
 
     if (!user) return res.status(401).json({ error: 'User not found' })
     if (!user.is_active) return res.status(403).json({ error: 'Account deactivated' })
@@ -28,6 +30,10 @@ async function authenticate(req, res, next) {
     next()
   } catch (err) {
     console.error('Auth middleware error:', err.message)
+    // Don't crash — return 401 so frontend handles it gracefully
+    if (err.message?.includes('timeout') || err.message?.includes('reach database')) {
+      return res.status(503).json({ error: 'Server is temporarily busy. Please try again.', code: 'SERVER_BUSY' })
+    }
     return res.status(401).json({ error: 'Authentication failed' })
   }
 }

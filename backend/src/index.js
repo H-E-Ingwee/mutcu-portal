@@ -36,9 +36,28 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-// Rate limiting
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false })
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false })
+// Keep-alive connections — prevents ERR_CONNECTION_CLOSED on Render free tier
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('Keep-Alive', 'timeout=30')
+  next()
+})
+
+// Rate limiting — generous limits for nomination day (300 members)
+const limiter = rateLimit({ 
+  windowMs: 15 * 60 * 1000, 
+  max: 1000,  // 1000 requests per 15 min per IP (was 300)
+  standardHeaders: true, 
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please wait a moment and try again.', code: 'RATE_LIMITED' }
+})
+const authLimiter = rateLimit({ 
+  windowMs: 15 * 60 * 1000, 
+  max: 100,   // 100 auth requests per 15 min per IP (was 20 — way too low!)
+  standardHeaders: true, 
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please wait 15 minutes and try again.', code: 'AUTH_RATE_LIMITED' }
+})
 app.use('/api/', limiter)
 app.use('/api/auth/', authLimiter)
 
@@ -94,6 +113,17 @@ app.listen(PORT, () => {
   // Verify Brevo SMTP connection on startup
   const { verifyConnection } = require('./lib/email')
   verifyConnection()
+})
+
+// Prevent unhandled promise rejections from crashing the server
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED REJECTION]', reason?.message || reason)
+  // Don't exit — just log it
+})
+
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.message)
+  // Don't exit for non-critical errors
 })
 
 module.exports = app
