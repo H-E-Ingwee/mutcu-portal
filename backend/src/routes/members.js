@@ -2,7 +2,7 @@ const express = require('express')
 const bcrypt = require('bcryptjs')
 const { v4: uuidv4 } = require('uuid')
 const router = express.Router()
-const prisma = require('../lib/prisma')
+const supabase = require('../lib/supabase')
 const { authenticate, requireRole } = require('../middleware/auth')
 const { sendApprovalEmail, sendVerificationEmail, sendRejectionEmail } = require('../lib/email')
 
@@ -45,15 +45,16 @@ function calcGradYear(studentId, prefix) {
 
 async function generateMutcuNumber(isAssociate = false) {
   const year = process.env.MUTCU_FOUNDING_YEAR || new Date().getFullYear()
-  const counterKey = isAssociate ? `associate_${year}` : `member_${year}`
-  const counter = await prisma.mutcuCounter.upsert({
-    where: { key: counterKey },
-    update: { value: { increment: 1 } },
-    create: { key: counterKey, value: 1 },
-    select: { value: true }
-  })
-  const prefix = isAssociate ? `MUTCU-A-${year}` : `MUTCU-${year}`
-  return `${prefix}-${String(counter.value).padStart(4, '0')}`
+  const prefix = isAssociate ? `MUTCU-A-${year}-` : `MUTCU-${year}-`
+  const { data: lastUser } = await supabase.from('users')
+    .select('mutcu_number').like('mutcu_number', `${prefix}%`)
+    .order('mutcu_number', { ascending: false }).limit(1)
+  let seq = 1
+  if (lastUser && lastUser.length > 0 && lastUser[0].mutcu_number) {
+    const parts = lastUser[0].mutcu_number.split('-')
+    seq = parseInt(parts[parts.length - 1]) + 1
+  }
+  return `${prefix}${String(seq).padStart(4, '0')}`
 }
 
 // ─── GET /api/members ─────────────────────────────────────────────────────────
@@ -83,13 +84,27 @@ router.get('/', authenticate, requireRole(...ALL_SECRETARY_ROLES), async (req, r
       ...(role ? { role } : {}),
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit)
-    const [members, total] = await Promise.all([
-      prisma.user.findMany({ where, orderBy: { created_at: 'desc' }, skip, take: parseInt(limit) }),
-      prisma.user.count({ where })
-    ])
-
-    res.json({ members: members.map(sanitize), total, page: parseInt(page), limit: parseInt(limit) })
+    let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false })
+    if (where.deleted_at === null) query = query.is('deleted_at', null)
+    if (where.OR && where.OR[0]?.primary_ministry) {
+      const min = where.OR[0].primary_ministry
+      query = query.or(`primary_ministry.eq.${min},secondary_ministry.eq.${min}`)
+    }
+    if (where.OR && where.OR.some(o => o.name)) {
+      const s = req.query.search
+      query = query.or(`name.ilike.%${s}%,email.ilike.%${s}%,mutcu_number.ilike.%${s}%,student_id.ilike.%${s}%`)
+    }
+    if (req.query.ministry) query = query.eq('primary_ministry', req.query.ministry)
+    if (req.query.year) query = query.eq('year_of_study', parseInt(req.query.year))
+    if (req.query.type) query = query.eq('membership_type', req.query.type)
+    if (req.query.status) query = query.eq('enrollment_status', req.query.status)
+    if (req.query.gender) query = query.eq('gender', req.query.gender)
+    if (req.query.role) query = query.eq('role', req.query.role)
+    const from = (parseInt(page) - 1) * parseInt(limit)
+    query = query.range(from, from + parseInt(limit) - 1)
+    const { data, error: listErr, count } = await query
+    if (listErr) throw listErr
+    res.json({ members: (data || []).map(sanitize), total: count || 0, page: parseInt(page), limit: parseInt(limit) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -98,11 +113,8 @@ router.get('/', authenticate, requireRole(...ALL_SECRETARY_ROLES), async (req, r
 // ─── GET /api/members/pending ─────────────────────────────────────────────────
 router.get('/pending', authenticate, requireRole('super_admin','ec_admin','cu_secretary'), async (req, res) => {
   try {
-    const members = await prisma.user.findMany({
-      where: { enrollment_status: 'pending' },
-      orderBy: { created_at: 'desc' }
-    })
-    res.json({ members: members.map(sanitize) })
+    const { data } = await supabase.from('users').select('*').eq('enrollment_status', 'pending').order('created_at', { ascending: false })
+    res.json({ members: (data || []).map(sanitize) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -111,10 +123,7 @@ router.get('/pending', authenticate, requireRole('super_admin','ec_admin','cu_se
 // ─── GET /api/members/public/:mutcuNumber ─────────────────────────────────────
 router.get('/public/:mutcuNumber', async (req, res) => {
   try {
-    const member = await prisma.user.findUnique({
-      where: { mutcu_number: req.params.mutcuNumber },
-      select: { name: true, mutcu_number: true, photo_url: true, primary_ministry: true, membership_type: true, membership_year: true, enrollment_status: true }
-    })
+    const { data: member } = await supabase.from('users').select('name,mutcu_number,photo_url,primary_ministry,membership_type,membership_year,enrollment_status').eq('mutcu_number', req.params.mutcuNumber).single()
     if (!member || member.enrollment_status !== 'active') return res.status(404).json({ error: 'Member not found' })
     res.json({ member })
   } catch (err) {
@@ -125,7 +134,7 @@ router.get('/public/:mutcuNumber', async (req, res) => {
 // ─── GET /api/members/:id ─────────────────────────────────────────────────────
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const member = await prisma.user.findUnique({ where: { id: req.params.id } })
+    const { data: member } = await supabase.from('users').select('*').eq('id', req.params.id).single()
     if (!member) return res.status(404).json({ error: 'Member not found' })
     res.json({ member: sanitize(member) })
   } catch (err) {
@@ -137,7 +146,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, requireRole('super_admin','ec_admin','cu_secretary'), async (req, res) => {
   try {
     const { name, email, student_id, gender, year_of_study, membership_type, primary_ministry, faith_declaration_signed } = req.body
-    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+    const { data: existing } = await supabase.from('users').select('id').eq('email', email).single()
     if (existing) return res.status(400).json({ error: 'Email already registered' })
 
     const tempPassword = Math.random().toString(36).slice(-10)
@@ -146,33 +155,31 @@ router.post('/', authenticate, requireRole('super_admin','ec_admin','cu_secretar
     const mutcuNumber = await generateMutcuNumber(membership_type === 'associate')
     const verificationToken = uuidv4()
 
-    const user = await prisma.user.create({
-      data: {
-        name, email, password: hashed,
-        student_id: student_id || null,
-        school_prefix: schoolPrefix,
-        gender, year_of_study: year_of_study ? parseInt(year_of_study) : null,
-        graduation_year: calcGradYear(student_id, schoolPrefix),
-        membership_type: membership_type || 'full', membership_tier: 'general',
-        primary_ministry: primary_ministry || null,
-        faith_declaration_signed: !!faith_declaration_signed,
-        declaration_signed_at: faith_declaration_signed ? new Date() : null,
-        enrollment_status: 'active', enrollment_year: new Date().getFullYear(),
-        membership_year: new Date().getFullYear(), role: 'full_member',
-        mutcu_number: mutcuNumber, email_verified: false,
-        email_verification_token: verificationToken,
-        email_verification_sent_at: new Date(),
-        is_active: true, profile_complete: true, disciplinary_status: 'clear',
-        must_change_password: true, is_temp_password: true,
-      }
-    })
+    const { data: user, error: enrollErr } = await supabase.from('users').insert({
+      name, email, password: hashed,
+      student_id: student_id || null, school_prefix: schoolPrefix,
+      gender, year_of_study: year_of_study ? parseInt(year_of_study) : null,
+      graduation_year: calcGradYear(student_id, schoolPrefix),
+      membership_type: membership_type || 'full', membership_tier: 'general',
+      primary_ministry: primary_ministry || null,
+      faith_declaration_signed: !!faith_declaration_signed,
+      declaration_signed_at: faith_declaration_signed ? new Date().toISOString() : null,
+      enrollment_status: 'active', enrollment_year: new Date().getFullYear(),
+      membership_year: new Date().getFullYear(), role: 'full_member',
+      mutcu_number: mutcuNumber, email_verified: false,
+      email_verification_token: verificationToken,
+      email_verification_sent_at: new Date().toISOString(),
+      is_active: true, profile_complete: true, disciplinary_status: 'clear',
+      must_change_password: true, is_temp_password: true,
+    }).select().single()
+    if (enrollErr) throw enrollErr
 
     sendVerificationEmail({ ...user, temp_password: tempPassword }, verificationToken)
       .catch(e => console.error('[WELCOME EMAIL ERROR]', e.message))
 
     res.status(201).json({ member: sanitize(user), message: `Member enrolled. MUTCU number: ${mutcuNumber}` })
   } catch (err) {
-    if (err.code === 'P2002') return res.status(400).json({ error: 'Email or student ID already registered' })
+    if (err.code === '23505') return res.status(400).json({ error: 'Email or student ID already registered' })
     res.status(500).json({ error: err.message })
   }
 })
@@ -192,7 +199,8 @@ router.put('/:id', authenticate, requireRole('super_admin','ec_admin','cu_secret
     }
     if (data.year_of_study) data.year_of_study = parseInt(data.year_of_study)
 
-    const member = await prisma.user.update({ where: { id: req.params.id }, data })
+    const { data: member, error: putErr } = await supabase.from('users').update(data).eq('id', req.params.id).select().single()
+    if (putErr) throw putErr
     res.json({ member: sanitize(member) })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -202,7 +210,7 @@ router.put('/:id', authenticate, requireRole('super_admin','ec_admin','cu_secret
 // ─── POST /api/members/:id/approve ───────────────────────────────────────────
 router.post('/:id/approve', authenticate, requireRole('super_admin','ec_admin','cu_secretary'), async (req, res) => {
   try {
-    const member = await prisma.user.findUnique({ where: { id: req.params.id } })
+    const { data: member } = await supabase.from('users').select('*').eq('id', req.params.id).single()
     if (!member) return res.status(404).json({ error: 'Member not found' })
 
     let mutcuNumber = member.mutcu_number
@@ -210,10 +218,7 @@ router.post('/:id/approve', authenticate, requireRole('super_admin','ec_admin','
       mutcuNumber = await generateMutcuNumber(member.membership_type === 'associate')
     }
 
-    const updated = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { enrollment_status: 'active', mutcu_number: mutcuNumber, is_active: true }
-    })
+    const { data: updated } = await supabase.from('users').update({ enrollment_status: 'active', mutcu_number: mutcuNumber, is_active: true }).eq('id', req.params.id).select().single()
 
     sendApprovalEmail({ ...updated, mutcu_number: mutcuNumber })
       .catch(e => console.error('[APPROVAL EMAIL ERROR]', e.message))
@@ -227,14 +232,8 @@ router.post('/:id/approve', authenticate, requireRole('super_admin','ec_admin','
 // ─── POST /api/members/:id/reject ────────────────────────────────────────────
 router.post('/:id/reject', authenticate, requireRole('super_admin','ec_admin','cu_secretary'), async (req, res) => {
   try {
-    const member = await prisma.user.findUnique({
-      where: { id: req.params.id },
-      select: { name: true, email: true }
-    })
-    await prisma.user.update({
-      where: { id: req.params.id },
-      data: { enrollment_status: 'rejected' }
-    })
+    const { data: member } = await supabase.from('users').select('name,email').eq('id', req.params.id).single()
+    await supabase.from('users').update({ enrollment_status: 'rejected' }).eq('id', req.params.id)
     res.json({ message: 'Registration rejected' })
     if (member) sendRejectionEmail(member, req.body.reason || '').catch(() => {})
   } catch (err) {
@@ -253,7 +252,7 @@ router.post('/import', authenticate, requireRole('super_admin','ec_admin','cu_se
 
     for (const row of membersData) {
       if (!row.name || !row.email) { errors.push('Missing name or email'); continue }
-      const existing = await prisma.user.findUnique({ where: { email: row.email }, select: { id: true } })
+      const { data: existing } = await supabase.from('users').select('id').eq('email', row.email).single()
       if (existing) { errors.push(`${row.email} already exists`); continue }
 
       const tempPassword = Math.random().toString(36).slice(-10)
@@ -262,23 +261,22 @@ router.post('/import', authenticate, requireRole('super_admin','ec_admin','cu_se
       const mutcuNumber = await generateMutcuNumber(false)
 
       try {
-        await prisma.user.create({
-          data: {
-            name: row.name, email: row.email, password: hashed,
-            student_id: row.student_id || null, school_prefix: prefix,
-            gender: row.gender || null,
-            year_of_study: row.year_of_study ? parseInt(row.year_of_study) : null,
-            graduation_year: calcGradYear(row.student_id, prefix),
-            membership_type: row.membership_type || 'full', membership_tier: 'general',
-            primary_ministry: row.primary_ministry || null,
-            faith_declaration_signed: true, declaration_signed_at: new Date(),
-            enrollment_status: 'active', enrollment_year: new Date().getFullYear(),
-            membership_year: new Date().getFullYear(), role: 'full_member',
-            mutcu_number: mutcuNumber, email_verified: false,
-            is_active: true, profile_complete: true, disciplinary_status: 'clear',
-            must_change_password: true, is_temp_password: true,
-          }
+        const { error: impErr } = await supabase.from('users').insert({
+          name: row.name, email: row.email, password: hashed,
+          student_id: row.student_id || null, school_prefix: prefix,
+          gender: row.gender || null,
+          year_of_study: row.year_of_study ? parseInt(row.year_of_study) : null,
+          graduation_year: calcGradYear(row.student_id, prefix),
+          membership_type: row.membership_type || 'full', membership_tier: 'general',
+          primary_ministry: row.primary_ministry || null,
+          faith_declaration_signed: true, declaration_signed_at: new Date().toISOString(),
+          enrollment_status: 'active', enrollment_year: new Date().getFullYear(),
+          membership_year: new Date().getFullYear(), role: 'full_member',
+          mutcu_number: mutcuNumber, email_verified: false,
+          is_active: true, profile_complete: true, disciplinary_status: 'clear',
+          must_change_password: true, is_temp_password: true,
         })
+        if (impErr) throw impErr
         count++
       } catch (e) {
         errors.push(`${row.email}: ${e.message}`)
