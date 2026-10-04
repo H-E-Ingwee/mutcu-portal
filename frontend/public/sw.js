@@ -1,5 +1,5 @@
-// MUTCU DMS Service Worker — PWA Support
-const CACHE_NAME = 'mutcu-dms-v1'
+// MUTCU DMS Service Worker — PWA Support v3
+const CACHE_NAME = 'mutcu-dms-v3'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -10,7 +10,9 @@ const STATIC_ASSETS = [
 // Install — cache static assets
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .catch(() => {}) // Don't fail install if caching fails
   )
   self.skipWaiting()
 })
@@ -25,23 +27,70 @@ self.addEventListener('activate', event => {
   self.clients.claim()
 })
 
-// Fetch — network first, cache fallback for navigation
+// Fetch — ONLY intercept same-origin static assets
+// ALL cross-origin requests (API, Supabase, Cloudinary) pass through untouched
 self.addEventListener('fetch', event => {
   const { request } = event
-  // Skip non-GET and API requests
-  if (request.method !== 'GET' || request.url.includes('/api/')) return
 
-  // Navigation requests — serve index.html from cache if offline
+  // Skip non-GET requests entirely
+  if (request.method !== 'GET') return
+
+  let url
+  try {
+    url = new URL(request.url)
+  } catch {
+    return // Invalid URL — skip
+  }
+
+  // Skip ALL cross-origin requests (API on Render, Supabase, Cloudinary, etc.)
+  if (url.origin !== self.location.origin) return
+
+  // Skip chrome extensions
+  if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') return
+
+  // Skip API routes on same origin
+  if (url.pathname.startsWith('/api/')) return
+
+  // Navigation requests — try network first, fall back to cached index.html
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
+      fetch(request)
+        .then(response => {
+          // Cache successful navigation responses
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone)).catch(() => {})
+          }
+          return response
+        })
+        .catch(() => {
+          // Offline — serve cached index.html
+          return caches.match('/index.html').then(cached => {
+            if (cached) return cached
+            // If no cache, return a minimal offline page
+            return new Response('<html><body><h1>MUTCU DMS</h1><p>You are offline. Please check your connection.</p></body></html>', {
+              headers: { 'Content-Type': 'text/html' }
+            })
+          })
+        })
     )
     return
   }
 
-  // Static assets — cache first
+  // Static assets (JS, CSS, images) — cache first, network fallback
   event.respondWith(
-    caches.match(request).then(cached => cached || fetch(request))
+    caches.match(request).then(cached => {
+      if (cached) return cached
+      return fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone)).catch(() => {})
+          }
+          return response
+        })
+        .catch(() => new Response('', { status: 408 })) // Timeout fallback
+    })
   )
 })
 

@@ -64,19 +64,32 @@ router.get('/eligible/:positionId', authenticate, requireApproved, async (req, r
       query = query.or(`name.ilike.%${search}%,primary_ministry.ilike.%${search}%,mutcu_number.ilike.%${search}%`)
     }
 
-    const { data: members } = await query.order('name', { ascending: true })
     const maxTerms = position.chair_max_one_term ? 1 : (position.max_terms || 2)
-    const eligible = []
 
+    // ── BATCH query: fetch members + their appointments in 2 queries (not N+1) ──
+    const [{ data: members }, { data: appointments }] = await Promise.all([
+      query.order('name', { ascending: true }),
+      // Get all appointments for this position in ONE query
+      supabase.from('appointments')
+        .select('user_id')
+        .eq('position_id', position.id),
+    ])
+
+    // Build a map of user_id → appointment count for O(1) lookup
+    const appointmentCounts = {}
+    for (const appt of appointments || []) {
+      appointmentCounts[appt.user_id] = (appointmentCounts[appt.user_id] || 0) + 1
+    }
+
+    const eligible = []
     for (const member of members || []) {
       const courseType = member.course_type || 'degree'
       const prefix = (member.school_prefix || '').toUpperCase()
       const maxYear = courseType === 'diploma' ? 3 : (prefix === 'SE' ? 5 : 4)
+      // Skip finalists
       if ((member.year_of_study || 0) >= maxYear || member.is_finalist) continue
-      const { count } = await supabase.from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('position_id', position.id).eq('user_id', member.id)
-      if ((count || 0) >= maxTerms) continue
+      // Skip term-limited members (using pre-fetched map — no extra DB call)
+      if ((appointmentCounts[member.id] || 0) >= maxTerms) continue
       eligible.push({
         id: member.id, name: member.name,
         photo: member.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=04003D&color=FF9700&size=200&bold=true`,

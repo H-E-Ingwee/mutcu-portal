@@ -42,7 +42,7 @@ export default function Nominations() {
   }, [])
 
   // Load eligible members when position or search changes
-  const loadMembers = useCallback(async (posId, searchTerm) => {
+  const loadMembers = useCallback(async (posId, searchTerm, retries = 2) => {
     if (!posId) { setMembers([]); setTotalEligible(0); return }
     setLoadingMembers(true)
     try {
@@ -154,12 +154,18 @@ export default function Nominations() {
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" /></div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange" />
+      </div>
+    )
+  }
 
   if (!cycle || cycle.status !== 'nominations_open') {
     const statusMessages = {
       draft: { title: 'Nominations Not Yet Open', msg: 'The nomination cycle has not started yet. Please check back later.' },
-      prayer_period: { title: 'Prayer Period', msg: "We are currently in the prayer period. Nominations will open soon. Please pray for God's guidance." },
+      prayer_period: { title: 'Prayer Period', msg: 'We are currently in the prayer period. Nominations will open soon. Please pray for God\'s guidance.' },
       vetting: { title: 'Nominations Closed', msg: 'The nomination period has ended. The Nomination College is currently vetting candidates.' },
       nominees_published: { title: 'Nominees Published', msg: 'Nominations are closed. You can view the published nominees.' },
       objection_period: { title: 'Objection Period', msg: 'Nominations are closed. The objection period is currently open.' },
