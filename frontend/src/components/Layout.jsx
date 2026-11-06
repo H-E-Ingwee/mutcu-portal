@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, FileText, Award, BarChart3, Settings,
   LogOut, Menu, Bell, UserCircle, Shield, BookOpen, Mic2,
   MessageSquare, ClipboardList, Megaphone, History, Send, X,
-  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp, Heart, Sparkles, Database
+  CalendarDays, ShieldAlert, DollarSign, Lock, Clock, TrendingUp, Heart, Sparkles, Database, Library
 } from 'lucide-react'
 
 function PendingLock() {
@@ -54,7 +54,7 @@ export default function Layout() {
   }, [])
 
   useEffect(() => {
-    const canSeeChanges = ['super_admin', 'ec_admin', 'cu_secretary'].includes(user?.role)
+    const canSeeChanges = ['super_admin', 'ec_admin', 'cu_secretary', 'vice_secretary'].includes(user?.role)
     if (!canSeeChanges) return
     api.get('/users/pending-changes').then(r => setPendingChangesCount(r.data.total || 0)).catch(() => {})
   }, [user?.role])
@@ -143,6 +143,9 @@ export default function Layout() {
             </>
           ) : (
             <>
+              {/* E-Library — visible to ALL members regardless of role */}
+              <NavItem to="/library" icon={Library} label="E-Library" />
+
               {/* General member nav */}
               {!isTreasurer && (
                 <>
@@ -224,8 +227,24 @@ export default function Layout() {
                 </>
               )}
 
-              {/* Secretary */}
-              {isSecretary && isSecretary() && (
+              {/* Vice Secretary — full secretary privileges */}
+              {user?.role === 'vice_secretary' && (
+                <>
+                  <SectionLabel label="Vice Secretary" />
+                  <NavItem to="/secretary/members" icon={Users} label="Member Register" />
+                  <NavItem to="/secretary/members/pending" icon={Bell} label="Pending Approvals" badge={pendingChangesCount} />
+                  <NavItem to="/admin/messages" icon={MessageSquare} label="Messages" />
+                  <NavItem to="/admin/bulk-email" icon={Megaphone} label="Bulk Email" />
+                  <NavItem to="/calendar" icon={CalendarDays} label="Manage Calendar" />
+                  <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
+                  <NavItem to="/admin/disciplinary" icon={ShieldAlert} label="Disciplinary" />
+                  <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                  <NavItem to="/library/analytics" icon={Library} label="Library Analytics" />
+                </>
+              )}
+
+              {/* Secretary (cu_secretary, ec_admin, super_admin) */}
+              {isSecretary && isSecretary() && user?.role !== 'vice_secretary' && (
                 <>
                   <SectionLabel label="Secretary" />
                   <NavItem to="/secretary/members" icon={Users} label="Member Register" />
@@ -235,6 +254,7 @@ export default function Layout() {
                   <NavItem to="/calendar" icon={CalendarDays} label="Manage Calendar" />
                   <NavItem to="/analytics" icon={BarChart3} label="Analytics" />
                   <NavItem to="/treasurer/requisitions" icon={DollarSign} label="Requisitions" />
+                  <NavItem to="/library/analytics" icon={Library} label="Library Analytics" />
                 </>
               )}
 

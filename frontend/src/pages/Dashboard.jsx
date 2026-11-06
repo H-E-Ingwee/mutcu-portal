@@ -6,7 +6,7 @@ import {
   FileText, Award, CreditCard, Users, Settings, BarChart3,
   Clock, CheckCircle, Megaphone, Send, History, CalendarDays,
   Church, Bell, BookOpen, ShieldAlert, DollarSign, TrendingUp,
-  ArrowUpRight, ArrowDownRight, AlertTriangle, X
+  ArrowUpRight, ArrowDownRight, AlertTriangle, X, Library
 } from 'lucide-react'
 
 // ─── Pending member skeleton ──────────────────────────────────
@@ -366,6 +366,7 @@ export default function Dashboard() {
                   { to: '/calendar', icon: CalendarDays, label: 'Calendar', color: 'bg-teal/10 text-teal', show: true },
                   { to: '/contact', icon: Send, label: 'Contact Admin', color: 'bg-gray-100 text-gray-600', show: true },
                   { to: '/constitution', icon: BookOpen, label: 'Constitution', color: 'bg-navy/10 text-navy', show: true },
+                  { to: '/library', icon: Library, label: 'E-Library', color: 'bg-orange/10 text-orange', show: true },
                   { to: '/nc', icon: FileText, label: 'NC Panel', color: 'bg-orange/10 text-orange', show: isNC && isNC() },
                   { to: '/secretary/members', icon: Users, label: 'Members', color: 'bg-blue-100 text-blue-600', show: isSecretary && isSecretary() },
                   { to: '/admin', icon: Settings, label: 'Admin', color: 'bg-red/10 text-red', show: isAdmin && isAdmin() },

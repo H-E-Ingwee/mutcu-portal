@@ -22,6 +22,8 @@ import Leadership from './pages/Leadership'
 import Analytics from './pages/Analytics'
 import CalendarPage from './pages/Calendar'
 import Constitution from './pages/Constitution'
+import Library from './pages/Library'
+import LibraryAnalytics from './pages/LibraryAnalytics'
 
 import Nominations from './pages/nominations/Nominations'
 import Nominees from './pages/nominations/Nominees'
@@ -141,6 +143,8 @@ function AppRoutes() {
         <Route path="leadership" element={<Leadership />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="constitution" element={<Constitution />} />
+        <Route path="library" element={<Library />} />
+        <Route path="library/analytics" element={<ProtectedRoute roles={['super_admin','ec_admin','cu_secretary','vice_secretary']}><LibraryAnalytics /></ProtectedRoute>} />
         <Route path="nominations" element={<Nominations />} />
         <Route path="nominations/nominees" element={<Nominees />} />
         <Route path="treasurer" element={<ProtectedRoute roles={['cu_treasurer','ec_admin','super_admin','cu_secretary',...ALL_SECRETARY_ROLES,'1st_vp','2nd_vp','vice_secretary','prayer_coordinator','music_coordinator','missions_coordinator','bible_study_coordinator','discipleship_coordinator','tech_media_coordinator','creative_arts_coordinator','interim_chair','interim_secretary','interim_treasurer']}><TreasurerDashboard /></ProtectedRoute>} />
